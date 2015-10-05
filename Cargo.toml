@@ -2,12 +2,12 @@
 name = "mould"
 version = "0.0.1"
 authors = ["Denis Kolodin <deniskolodin@gmail.com>"]
-description = "Web-framework for websocket based web-apps."
+description = "Rust web-framework for websocket based web-apps."
+repository = "https://github.com/DenisKolodin/mould"
+license = "MIT"
 
 [dependencies]
 log = "~0.3"
-env_logger = "~0.3"
 rustc-serialize = "~0.3"
-#mime = "~0.1"
 hyper = "~0.6"
 websocket = "~0.12"
