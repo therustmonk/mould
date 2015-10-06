@@ -1,4 +1,4 @@
-use super::{Json, Object};
+pub use rustc_serialize::json::{Json, Object};
 use session::ContextMap;
 
 pub type WorkerResult = Result<Option<Box<Iterator<Item=Object>>>, String>;

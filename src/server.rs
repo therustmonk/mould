@@ -5,7 +5,7 @@ use std::net::ToSocketAddrs;
 
 use websocket::Server;
 use session::{Session, SessionError, Output};
-use handler::{Handler, Worker};
+use handlers::Handler;
 
 pub type BoxedHandler = Box<Handler + Send + Sync>;
 pub type ServicesMap = HashMap<String, BoxedHandler>;
