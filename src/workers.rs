@@ -1,5 +1,5 @@
 pub use rustc_serialize::json::{Json, Object};
-use session::ContextMap;
+//use session::ContextMap;
 use std::iter::Iterator;
 
 pub type WorkerResult = Result<Option<Box<Iterator<Item=Object>>>, String>;
@@ -8,7 +8,7 @@ pub trait Worker<CTX> {
     fn realize(&mut self, context: &mut CTX) -> WorkerResult;
 }
 
-impl<F, CTX: ContextMap> Worker<CTX> for F where F: FnMut(&mut CTX) -> WorkerResult {
+impl<F, CTX> Worker<CTX> for F where F: FnMut(&mut CTX) -> WorkerResult {
     fn realize(&mut self, context: &mut CTX) -> WorkerResult {
         self(context)
     }

@@ -14,6 +14,8 @@
 //! * {"event": "reject", "data": {"message": "text_of_message"}}
 
 //use std::iter::Iterator;
+use std::default::Default;
+
 use websocket::Message;
 use websocket::client::Client as WSClient;
 use websocket::dataframe::DataFrame;
@@ -42,9 +44,7 @@ macro_rules! json{
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 //pub type ContextMap = HashMap<String, String>;
 
-pub trait ContextMap: 'static {
-    fn new() -> Self;
-}
+pub trait SessionData: Default + 'static {}
 
 pub struct Session<CTX> {
     client: Client,
@@ -107,11 +107,11 @@ pub enum SessionError {
     RejectedByHandler(String),
 }
 
-impl<CTX: ContextMap> Session<CTX> {
+impl<CTX: SessionData> Session<CTX> {
     pub fn new(client: Client) -> Self {
         Session {
             client: client,
-            context: CTX::new(),
+            context: CTX::default(),
         }
     }
 

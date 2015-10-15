@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 
 use websocket::Server;
-use session::{Session, SessionError, Output, ContextMap};
+use session::{Session, SessionError, Output, SessionData};
 use handlers::Handler;
 
 pub type BoxedHandler<CTX> = Box<Handler<CTX> + Send + Sync>;
 pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
 
 
-pub fn start<To: ToSocketAddrs, CTX: ContextMap>(addr: To, services: ServicesMap<CTX>) {
+pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMap<CTX>) {
     // CLIENTS HANDLING
     let server = Server::bind(addr).unwrap();
     let services = Arc::new(services);
