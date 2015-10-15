@@ -14,7 +14,6 @@ impl<F, CTX> Worker<CTX> for F where F: FnMut(&mut CTX) -> WorkerResult {
     }
 }
 
-/*
 pub struct RejectWorker {
 	reason: String,
 }
@@ -25,13 +24,14 @@ impl RejectWorker {
 	}
 }
 
-impl Worker for RejectWorker {
-    fn realize(&mut self, _: &mut ContextMap) -> WorkerResult {
+impl<CTX> Worker<CTX> for RejectWorker {
+    fn realize(&mut self, _: &mut CTX) -> WorkerResult {
         Err(self.reason.clone())
     }
 }
 
 
+/*
 pub struct KeyDropWorker {
 	keys: Vec<String>,
 }
