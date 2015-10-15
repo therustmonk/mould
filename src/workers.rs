@@ -1,12 +1,18 @@
 pub use rustc_serialize::json::{Json, Object};
 use session::ContextMap;
+use std::iter::Iterator;
 
 pub type WorkerResult = Result<Option<Box<Iterator<Item=Object>>>, String>;
 
 pub trait Worker {
-    fn next(&mut self, context: &mut ContextMap) -> WorkerResult;
+    fn realize(&mut self, context: &mut ContextMap) -> WorkerResult;
 }
 
+impl<F> Worker for F where F: FnMut(&mut ContextMap) -> WorkerResult {
+    fn realize(&mut self, context: &mut ContextMap) -> WorkerResult {
+        self(context)
+    }
+}
 
 pub struct RejectWorker {
 	reason: String,
@@ -19,7 +25,7 @@ impl RejectWorker {
 }
 
 impl Worker for RejectWorker {
-    fn next(&mut self, _: &mut ContextMap) -> WorkerResult {
+    fn realize(&mut self, _: &mut ContextMap) -> WorkerResult {
         Err(self.reason.clone())
     }
 }
@@ -36,7 +42,7 @@ impl KeyDropWorker {
 }
 
 impl Worker for KeyDropWorker {
-    fn next(&mut self, context: &mut ContextMap) -> WorkerResult {
+    fn realize(&mut self, context: &mut ContextMap) -> WorkerResult {
  		for key in &self.keys {
  			context.remove(key);
  		}
@@ -56,7 +62,7 @@ impl ContextDumpWorker {
 }
 
 impl Worker for ContextDumpWorker {
-    fn next(&mut self, context: &mut ContextMap) -> WorkerResult {
+    fn realize(&mut self, context: &mut ContextMap) -> WorkerResult {
     	if self.done {
     		Ok(None)	
     	} else {

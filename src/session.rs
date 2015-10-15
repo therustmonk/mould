@@ -56,15 +56,23 @@ pub trait Extractor<T> {
     fn extract(&mut self, key: &str) -> Option<T>;
 }
 
-impl Extractor<String> for Request {
-    fn extract(&mut self, key: &str) -> Option<String> {
-        if let Some(Json::String(data)) = self.payload.remove(key) {
-            Some(data)
-        } else {
-            None
+macro_rules! extract_as {
+    ($from:path => $to:ty) => {
+        impl Extractor<$to> for Request {
+            fn extract(&mut self, key: &str) -> Option<$to> {
+                if let Some($from(data)) = self.payload.remove(key) {
+                    Some(data)
+                } else {
+                    None
+                }
+            }
         }
     }
 }
+
+extract_as!(Json::String => String);
+extract_as!(Json::I64 => i64);
+
 
 pub enum Input {
     Request(String, Request),

@@ -58,7 +58,7 @@ pub fn start<To: ToSocketAddrs>(addr: To, services: ServicesMap) {
                     let mut worker = handler.build(request);
 
                     loop {
-                        match worker.next(session.borrow_mut_context()) {
+                        match worker.realize(session.borrow_mut_context()) {
                             Ok(Some(iter)) => {
                                 try!(session.send(Output::Ready));
                                 try!(session.recv_next());
