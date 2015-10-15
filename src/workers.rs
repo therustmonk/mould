@@ -4,16 +4,17 @@ use std::iter::Iterator;
 
 pub type WorkerResult = Result<Option<Box<Iterator<Item=Object>>>, String>;
 
-pub trait Worker {
-    fn realize(&mut self, context: &mut ContextMap) -> WorkerResult;
+pub trait Worker<CTX> {
+    fn realize(&mut self, context: &mut CTX) -> WorkerResult;
 }
 
-impl<F> Worker for F where F: FnMut(&mut ContextMap) -> WorkerResult {
-    fn realize(&mut self, context: &mut ContextMap) -> WorkerResult {
+impl<F, CTX: ContextMap> Worker<CTX> for F where F: FnMut(&mut CTX) -> WorkerResult {
+    fn realize(&mut self, context: &mut CTX) -> WorkerResult {
         self(context)
     }
 }
 
+/*
 pub struct RejectWorker {
 	reason: String,
 }
@@ -75,4 +76,4 @@ impl Worker for ContextDumpWorker {
     	}
     }
 }
-
+*/

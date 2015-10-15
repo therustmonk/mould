@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 
 use websocket::Server;
-use session::{Session, SessionError, Output};
+use session::{Session, SessionError, Output, ContextMap};
 use handlers::Handler;
 
-pub type BoxedHandler = Box<Handler + Send + Sync>;
-pub type ServicesMap = HashMap<String, BoxedHandler>;
+pub type BoxedHandler<CTX> = Box<Handler<CTX> + Send + Sync>;
+pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
 
 
-pub fn start<To: ToSocketAddrs>(addr: To, services: ServicesMap) {
+pub fn start<To: ToSocketAddrs, CTX: ContextMap>(addr: To, services: ServicesMap<CTX>) {
     // CLIENTS HANDLING
     let server = Server::bind(addr).unwrap();
     let services = Arc::new(services);
@@ -42,13 +42,13 @@ pub fn start<To: ToSocketAddrs>(addr: To, services: ServicesMap) {
 
             debug!("Connection from {}", ip);
 
-            let mut session = Session::new(client);
+            let mut session: Session<CTX> = Session::new(client);
             // TODO Determine handler by action name (refactoring handler needed)
 
             debug!("Start session for {}", ip);
             loop { // Session loop
                 debug!("Begin new request workout for {}", ip);
-                let result: Result<(), SessionError> = (|session: &mut Session| loop { // Request loop
+                let result: Result<(), SessionError> = (|session: &mut Session<CTX>| loop { // Request loop
                     let (service, request) = try!(session.recv_request());
                     let handler = match services.get(&service) {
                         Some(value) => value,

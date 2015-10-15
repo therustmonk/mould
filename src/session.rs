@@ -21,7 +21,7 @@ use websocket::server::sender::Sender;
 use websocket::server::receiver::Receiver;
 use websocket::stream::WebSocketStream;
 use rustc_serialize::json::{Json, ToJson, Object};
-use std::collections::HashMap;
+//use std::collections::HashMap;
 
 macro_rules! json{
     ([$($val:tt),*]) => {{
@@ -40,11 +40,15 @@ macro_rules! json{
 }
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
-pub type ContextMap = HashMap<String, String>;
+//pub type ContextMap = HashMap<String, String>;
 
-pub struct Session {
+pub trait ContextMap: 'static {
+    fn new() -> Self;
+}
+
+pub struct Session<CTX> {
     client: Client,
-    context: ContextMap,
+    context: CTX,
 }
 
 pub struct Request {
@@ -103,15 +107,15 @@ pub enum SessionError {
     RejectedByHandler(String),
 }
 
-impl Session {
-    pub fn new(client: Client) -> Session {
+impl<CTX: ContextMap> Session<CTX> {
+    pub fn new(client: Client) -> Self {
         Session {
             client: client,
-            context: ContextMap::new(),
+            context: CTX::new(),
         }
     }
 
-    pub fn borrow_mut_context(&mut self) -> &mut ContextMap {
+    pub fn borrow_mut_context(&mut self) -> &mut CTX {
         &mut self.context
     }
 
