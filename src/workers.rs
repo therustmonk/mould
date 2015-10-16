@@ -1,17 +1,17 @@
 pub use rustc_serialize::json::{Json, Object};
-//use session::ContextMap;
 use std::iter::Iterator;
 
-pub type WorkerResult = Result<Option<Box<Iterator<Item=Object>>>, String>;
 
-/*
-enum WorkerResult {
-    ManyItems(Iterator<Item=Object>>),
+pub type BoxedObjects = Box<Iterator<Item=Object>>;
+
+pub enum WorkerResult {
+    ManyItems(BoxedObjects),
+    ManyItemsAndDone(BoxedObjects),
     OneItem(Object),
+    OneItemAndDone(Object),
     Reject(String),
     Done,
 }
-*/
 
 pub trait Worker<CTX> {
     fn realize(&mut self, context: &mut CTX) -> WorkerResult;
@@ -35,7 +35,7 @@ impl RejectWorker {
 
 impl<CTX> Worker<CTX> for RejectWorker {
     fn realize(&mut self, _: &mut CTX) -> WorkerResult {
-        Err(self.reason.clone())
+        WorkerResult::Reject(self.reason.clone())
     }
 }
 

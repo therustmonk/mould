@@ -44,13 +44,11 @@ macro_rules! json {
 }
 
 #[macro_export]
-macro_rules! json_item {
+macro_rules! object {
     ({ $($key:expr => $val:tt),* }) => {{
         let mut object = $crate::session::Object::new();
-        $( object.insert($key.to_owned(), json!($val)); )*        
-        let vec = vec![object];
-        let iter = vec.into_iter();
-        Box::new(iter)                
+        $( object.insert($key.to_owned(), json!($val)); )*
+        object
     }};
 }
 

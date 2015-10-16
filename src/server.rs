@@ -6,6 +6,7 @@ use std::net::ToSocketAddrs;
 use websocket::Server;
 use session::{Session, SessionError, Output, SessionData};
 use handlers::Handler;
+use workers::WorkerResult;
 
 pub type BoxedHandler<CTX> = Box<Handler<CTX> + Send + Sync>;
 pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
@@ -59,15 +60,34 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
 
                     loop {
                         match worker.realize(session.borrow_mut_context()) {
-                            Ok(Some(iter)) => {
+                            WorkerResult::Done => break,
+                            WorkerResult::OneItem(item) => {
+                                try!(session.send(Output::Ready));
+                                try!(session.recv_next());
+                                try!(session.send(Output::Item(item)));
+                            },
+                            WorkerResult::OneItemAndDone(item) => {
+                                try!(session.send(Output::Ready));
+                                try!(session.recv_next());
+                                try!(session.send(Output::Item(item)));
+                                break;
+                            },
+                            WorkerResult::ManyItems(iter) => {
                                 try!(session.send(Output::Ready));
                                 try!(session.recv_next());
                                 for item in iter {
                                     try!(session.send(Output::Item(item)));
                                 }
                             },
-                            Ok(None) => break,
-                            Err(reason) =>
+                            WorkerResult::ManyItemsAndDone(iter) => {
+                                try!(session.send(Output::Ready));
+                                try!(session.recv_next());
+                                for item in iter {
+                                    try!(session.send(Output::Item(item)));
+                                }
+                                break;
+                            },
+                            WorkerResult::Reject(reason) => 
                                 return Err(SessionError::RejectedByHandler(reason)),
                         }
                     }
