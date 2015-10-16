@@ -4,6 +4,15 @@ use std::iter::Iterator;
 
 pub type WorkerResult = Result<Option<Box<Iterator<Item=Object>>>, String>;
 
+/*
+enum WorkerResult {
+    ManyItems(Iterator<Item=Object>>),
+    OneItem(Object),
+    Reject(String),
+    Done,
+}
+*/
+
 pub trait Worker<CTX> {
     fn realize(&mut self, context: &mut CTX) -> WorkerResult;
 }

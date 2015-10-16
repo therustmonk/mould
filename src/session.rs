@@ -22,22 +22,35 @@ use websocket::dataframe::DataFrame;
 use websocket::server::sender::Sender;
 use websocket::server::receiver::Receiver;
 use websocket::stream::WebSocketStream;
-use rustc_serialize::json::{Json, ToJson, Object};
+pub use rustc_serialize::json::{Json, ToJson, Object};
 //use std::collections::HashMap;
 
-macro_rules! json{
+#[macro_export]
+macro_rules! json {
     ([$($val:tt),*]) => {{
         let mut array = Vec::new();
         $( array.push(json!($val)); )*
-        Json::Array(array)
+        $crate::session::Json::Array(array)
     }};
     ({ $($key:expr => $val:tt),* }) => {{
-        let mut object = Object::new();
+        let mut object = $crate::session::Object::new();
         $( object.insert($key.to_owned(), json!($val)); )*
-        Json::Object(object)
+        $crate::session::Json::Object(object)
     }};
     ($val:expr) => {{
+        use $crate::session::ToJson;
         $val.to_json()
+    }};
+}
+
+#[macro_export]
+macro_rules! json_item {
+    ({ $($key:expr => $val:tt),* }) => {{
+        let mut object = $crate::session::Object::new();
+        $( object.insert($key.to_owned(), json!($val)); )*        
+        let vec = vec![object];
+        let iter = vec.into_iter();
+        Box::new(iter)                
     }};
 }
 
