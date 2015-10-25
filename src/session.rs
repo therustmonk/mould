@@ -91,7 +91,7 @@ extract_as!(Request, Json::I64 => i64);
 
 pub enum Input {
     Request(String, Request),
-    Next,
+    Next(Option<Request>),
 }
 
 pub enum Output {
@@ -163,7 +163,30 @@ impl<CTX: SessionData> Session<CTX> {
                                     Err(SessionError::DataNotProvided),
                             }
                         } else if event == "next" {
-                            Ok(Input::Next)
+                            let request = match data.remove("data") {
+                                Some(Json::Object(mut data)) => {
+                                    let action = match data.remove("action") {
+                                        Some(Json::String(data)) => data,
+                                        _ => return Err(SessionError::IllegalRequestFormat),
+                                    };
+                                    let payload = match data.remove("payload") {
+                                        Some(Json::Object(data)) => data,
+                                        _ => return Err(SessionError::IllegalRequestFormat),
+                                    };
+                                    let request = Request {
+                                        action: action,
+                                        payload: payload,
+                                    };
+                                    Some(request)
+                                },               
+                                Some(Json::Null) =>
+                                    None,
+                                Some(_) =>
+                                    return Err(SessionError::IllegalDataFormat),
+                                None =>
+                                    None,
+                            };
+                            Ok(Input::Next(request))
                         } else if event == "cancel" {
                            Err(SessionError::Canceled)
                         } else {
@@ -198,9 +221,9 @@ impl<CTX: SessionData> Session<CTX> {
         }
     }
 
-    pub fn recv_next(&mut self) -> Result<(), SessionError> {
+    pub fn recv_next(&mut self) -> Result<Option<Request>, SessionError> {
         match self.recv() {
-            Ok(Input::Next) => Ok(()),
+            Ok(Input::Next(req)) => Ok(req),
             Ok(_) => Err(SessionError::UnexpectedState),
             Err(ie) => Err(ie),
         }

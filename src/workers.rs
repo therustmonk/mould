@@ -1,6 +1,6 @@
 pub use rustc_serialize::json::{Json, Object};
 use std::iter::Iterator;
-
+use session::{Request};
 
 pub type BoxedObjects = Box<Iterator<Item=Object>>;
 
@@ -13,15 +13,50 @@ pub enum WorkerResult {
     Done,
 }
 
-pub trait Worker<CTX> {
-    fn realize(&mut self, context: &mut CTX) -> WorkerResult;
+pub enum ShortcutResult {
+    Tuned,
+    Reject(String),
+    Done,
 }
 
-impl<F, CTX> Worker<CTX> for F where F: FnMut(&mut CTX) -> WorkerResult {
-    fn realize(&mut self, context: &mut CTX) -> WorkerResult {
-        self(context)
+pub trait AsReject<T> {
+    fn as_reject(self) -> T;
+}
+
+impl AsReject<WorkerResult> for String {
+    fn as_reject(self) -> WorkerResult {
+        WorkerResult::Reject(self)
     }
 }
+
+impl AsReject<ShortcutResult> for String {
+    fn as_reject(self) -> ShortcutResult {
+        ShortcutResult::Reject(self)
+    }
+}
+
+pub trait Worker<CTX> {
+    fn shortcut(&mut self, _: &mut CTX)
+        -> ShortcutResult {
+            ShortcutResult::Tuned
+    }
+    fn realize(&mut self, _: &mut CTX, _: Option<Request>)
+        -> WorkerResult {
+            WorkerResult::Reject("Worker unreachable state.".to_owned())
+    }
+}
+
+/*
+impl<F, CTX> Worker<CTX> for F where F: FnMut(&mut CTX, Option<Request>) -> WorkerResult {
+    fn shortcut(&mut self, context: &mut CTX) {
+        self(context, req)
+    }
+
+    fn realize(&mut self, context: &mut CTX, req: Option<Request>) -> WorkerResult {
+        
+    }
+}
+*/
 
 pub struct RejectWorker {
 	reason: String,
@@ -34,11 +69,10 @@ impl RejectWorker {
 }
 
 impl<CTX> Worker<CTX> for RejectWorker {
-    fn realize(&mut self, _: &mut CTX) -> WorkerResult {
-        WorkerResult::Reject(self.reason.clone())
+    fn shortcut(&mut self, _: &mut CTX) -> ShortcutResult {
+        ShortcutResult::Reject(self.reason.clone())
     }
 }
-
 
 /*
 pub struct KeyDropWorker {

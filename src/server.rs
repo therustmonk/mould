@@ -6,7 +6,7 @@ use std::net::ToSocketAddrs;
 use websocket::Server;
 use session::{Session, SessionError, Output, SessionData};
 use handlers::Handler;
-use workers::WorkerResult;
+use workers::{WorkerResult, ShortcutResult};
 
 pub type BoxedHandler<CTX> = Box<Handler<CTX> + Send + Sync>;
 pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
@@ -57,31 +57,44 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                     };
 
                     let mut worker = handler.build(request);
+                    /*
+                    let mut worker = match handler.build(request) {
+                        Ok(boxed) =>
+                            boxed,
+                        Err(reason) => 
+                            return Err(SessionError::RejectedByHandler(reason)),
+                    };
+                    */
+
+                    match worker.shortcut(session.borrow_mut_context()) {
+                        ShortcutResult::Done => {
+                            try!(session.send(Output::Done));
+                            continue
+                        },
+                        ShortcutResult::Reject(reason) =>
+                            return Err(SessionError::RejectedByHandler(reason)),
+                        ShortcutResult::Tuned =>
+                            (),
+                    }
 
                     loop {
-                        match worker.realize(session.borrow_mut_context()) {
+                        try!(session.send(Output::Ready));
+                        let option_request = try!(session.recv_next());
+                        match worker.realize(session.borrow_mut_context(), option_request) {
                             WorkerResult::Done => break,
                             WorkerResult::OneItem(item) => {
-                                try!(session.send(Output::Ready));
-                                try!(session.recv_next());
                                 try!(session.send(Output::Item(item)));
                             },
                             WorkerResult::OneItemAndDone(item) => {
-                                try!(session.send(Output::Ready));
-                                try!(session.recv_next());
                                 try!(session.send(Output::Item(item)));
                                 break;
                             },
                             WorkerResult::ManyItems(iter) => {
-                                try!(session.send(Output::Ready));
-                                try!(session.recv_next());
                                 for item in iter {
                                     try!(session.send(Output::Item(item)));
                                 }
                             },
                             WorkerResult::ManyItemsAndDone(iter) => {
-                                try!(session.send(Output::Ready));
-                                try!(session.recv_next());
                                 for item in iter {
                                     try!(session.send(Output::Item(item)));
                                 }
@@ -91,7 +104,7 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                                 return Err(SessionError::RejectedByHandler(reason)),
                         }
                     }
-
+                    
                     try!(session.send(Output::Done));
 
                 })(&mut session);
