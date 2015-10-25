@@ -72,8 +72,8 @@ pub trait Extractor<T> {
 }
 
 macro_rules! extract_as {
-    ($from:path => $to:ty) => {
-        impl Extractor<$to> for Request {
+    ($fort:ty, $from:path => $to:ty) => {
+        impl Extractor<$to> for $fort {
             fn extract(&mut self, key: &str) -> Option<$to> {
                 if let Some($from(data)) = self.payload.remove(key) {
                     Some(data)
@@ -85,8 +85,8 @@ macro_rules! extract_as {
     }
 }
 
-extract_as!(Json::String => String);
-extract_as!(Json::I64 => i64);
+extract_as!(Request, Json::String => String);
+extract_as!(Request, Json::I64 => i64);
 
 
 pub enum Input {
