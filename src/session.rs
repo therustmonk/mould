@@ -25,33 +25,6 @@ use websocket::stream::WebSocketStream;
 pub use rustc_serialize::json::{Json, ToJson, Object};
 //use std::collections::HashMap;
 
-#[macro_export]
-macro_rules! json {
-    ([$($val:tt),*]) => {{
-        let mut array = Vec::new();
-        $( array.push(json!($val)); )*
-        $crate::session::Json::Array(array)
-    }};
-    ({ $($key:expr => $val:tt),* }) => {{
-        let mut object = $crate::session::Object::new();
-        $( object.insert($key.to_owned(), json!($val)); )*
-        $crate::session::Json::Object(object)
-    }};
-    ($val:expr) => {{
-        use $crate::session::ToJson;
-        $val.to_json()
-    }};
-}
-
-#[macro_export]
-macro_rules! object {
-    ({ $($key:expr => $val:tt),* }) => {{
-        let mut object = $crate::session::Object::new();
-        $( object.insert($key.to_owned(), json!($val)); )*
-        object
-    }};
-}
-
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 //pub type ContextMap = HashMap<String, String>;
 
@@ -85,6 +58,7 @@ macro_rules! extract_as {
     }
 }
 
+extract_as!(Request, Json::Object => Object);
 extract_as!(Request, Json::String => String);
 extract_as!(Request, Json::I64 => i64);
 
