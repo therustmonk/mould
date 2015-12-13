@@ -7,8 +7,8 @@ repository = "https://github.com/DenisKolodin/mould"
 license = "MIT"
 
 [dependencies]
-log = "~0.3"
-rustc-serialize = "~0.3"
-hyper = "~0.6.16"
-websocket = "~0.12.2"
+log = "~0.3.4"
+rustc-serialize = "~0.3.16"
+hyper = "~0.7.0"
+websocket = { git = "https://github.com/cyderize/rust-websocket" } # "~0.14.0"
 json_macro = "~0.1.1"

@@ -13,20 +13,21 @@
 //! * {"event": "done"}
 //! * {"event": "reject", "data": {"message": "text_of_message"}}
 
-//use std::iter::Iterator;
 use std::default::Default;
 
+use std::str;
 use websocket::Message;
-use websocket::client::Client as WSClient;
+use websocket::Client as WSClient;
+use websocket::message::Type;
+use websocket::sender::Sender;
+use websocket::receiver::Receiver;
 use websocket::dataframe::DataFrame;
-use websocket::server::sender::Sender;
-use websocket::server::receiver::Receiver;
 use websocket::stream::WebSocketStream;
+use websocket::ws::receiver::Receiver as WSReceiver;
+
 pub use rustc_serialize::json::{Json, ToJson, Object};
-//use std::collections::HashMap;
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
-//pub type ContextMap = HashMap<String, String>;
 
 pub trait SessionData: Default + 'static {}
 
@@ -105,8 +106,13 @@ impl<CTX: SessionData> Session<CTX> {
     }
 
     fn recv(&mut self) -> Result<Input, SessionError> {
-        match self.client.recv_message() {
-            Ok(Message::Text(ref content)) => {
+        let message: Message = match self.client.get_mut_reciever().recv_message() {
+            Ok(m) => m,
+            Err(_) => return Err(SessionError::ConnectionBroken),
+        };
+        match message.opcode {
+            Type::Text => {
+                let content = str::from_utf8(&*message.payload).unwrap();
                 debug!("Recv => {}", content);
                 if let Ok(Json::Object(mut data)) = Json::from_str(&content) {
                     if let Some(Json::String(event)) = data.remove("event") {
@@ -174,16 +180,15 @@ impl<CTX: SessionData> Session<CTX> {
                     Err(SessionError::IllegalJsonFormat)
                 }
             },
-            Ok(Message::Ping(data)) => {
-                match self.client.send_message(Message::Pong(data)) {
+            Type::Ping => {
+                match self.client.send_message(&Message::pong(message.payload)) {
                     Ok(_) => self.recv(),
                     Err(_) => Err(SessionError::ConnectionBroken),
                 }                
             },
-            Ok(Message::Binary(_)) => Err(SessionError::IllegalMessage),
-            Ok(Message::Pong(_)) => Err(SessionError::IllegalMessage), // we don't send pings!
-            Ok(Message::Close(_)) => Err(SessionError::ConnectionClosed),
-            Err(_) => Err(SessionError::ConnectionBroken),
+            Type::Binary => Err(SessionError::IllegalMessage),
+            Type::Pong => Err(SessionError::IllegalMessage), // we don't send pings!
+            Type::Close => Err(SessionError::ConnectionClosed),
         }
     }
 
@@ -216,7 +221,7 @@ impl<CTX: SessionData> Session<CTX> {
         };
         let content = json.to_string();
         debug!("Send <= {}", content);
-        match self.client.send_message(Message::Text(content)) {
+        match self.client.send_message(&Message::text(content)) {
             Ok(_) => Ok(()),
             Err(_) => Err(SessionError::ConnectionBroken),
         }
