@@ -84,6 +84,7 @@ pub enum SessionError {
     IllegalMessage,
     IllegalDataFormat,
     IllegalRequestFormat,
+    BadMessageEncoding,
     ServiceNotFound,
     DataNotProvided,
     UnexpectedState,
@@ -112,7 +113,10 @@ impl<CTX: SessionData> Session<CTX> {
         };
         match message.opcode {
             Type::Text => {
-                let content = str::from_utf8(&*message.payload).unwrap();
+                let content = match str::from_utf8(&*message.payload) {
+                    Ok(data) => data,
+                    Err(_) => return Err(SessionError::BadMessageEncoding),
+                };
                 debug!("Recv => {}", content);
                 if let Ok(Json::Object(mut data)) = Json::from_str(&content) {
                     if let Some(Json::String(event)) = data.remove("event") {
@@ -184,7 +188,7 @@ impl<CTX: SessionData> Session<CTX> {
                 match self.client.send_message(&Message::pong(message.payload)) {
                     Ok(_) => self.recv(),
                     Err(_) => Err(SessionError::ConnectionBroken),
-                }                
+                }
             },
             Type::Binary => Err(SessionError::IllegalMessage),
             Type::Pong => Err(SessionError::IllegalMessage), // we don't send pings!

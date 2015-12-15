@@ -14,12 +14,14 @@ pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
 
 pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMap<CTX>) {
     // CLIENTS HANDLING
+    // Fail if can't bind, safe to unwrap
     let server = Server::bind(addr).unwrap();
     let services = Arc::new(services);
 
     for connection in server {
         let services = services.clone();
     	thread::spawn(move || {
+            // Separate thread, safe to unwrap connection initialization
             let request = connection.unwrap().read_request().unwrap(); // Get the request
             //let headers = request.headers.clone(); // Keep the headers so we can check them            
             request.validate().unwrap(); // Validate the request            
