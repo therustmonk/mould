@@ -94,6 +94,12 @@ pub enum SessionError {
     RejectedByHandler(String),
 }
 
+impl From<String> for SessionError {
+    fn from(reason: String) -> Self {
+        SessionError::RejectedByHandler(reason)
+    }
+}
+
 impl<CTX: SessionData> Session<CTX> {
     pub fn new(client: Client) -> Self {
         Session {

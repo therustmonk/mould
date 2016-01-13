@@ -6,7 +6,7 @@ use std::net::ToSocketAddrs;
 use websocket::Server;
 use session::{Session, SessionError, Output, SessionData};
 use handlers::Handler;
-use workers::{WorkerResult, ShortcutResult};
+use workers::{Realize, Shortcut};
 
 pub type BoxedHandler<CTX> = Box<Handler<CTX> + Send + Sync>;
 pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
@@ -68,42 +68,42 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                     };
                     */
 
-                    match worker.shortcut(session.borrow_mut_context()) {
-                        ShortcutResult::Done => {
+                    match try!(worker.shortcut(session.borrow_mut_context())) {
+                        Shortcut::Done => {
                             try!(session.send(Output::Done));
                             continue
                         },
-                        ShortcutResult::Reject(reason) =>
-                            return Err(SessionError::RejectedByHandler(reason)),
-                        ShortcutResult::Tuned =>
+                        //Shortcut::Reject(reason) =>
+                        //    return Err(SessionError::RejectedByHandler(reason)),
+                        Shortcut::Tuned =>
                             (),
                     }
 
                     loop {
                         try!(session.send(Output::Ready));
                         let option_request = try!(session.recv_next());
-                        match worker.realize(session.borrow_mut_context(), option_request) {
-                            WorkerResult::Done => break,
-                            WorkerResult::OneItem(item) => {
+                        match try!(worker.realize(session.borrow_mut_context(), option_request)) {
+                            Realize::Done => break,
+                            Realize::OneItem(item) => {
                                 try!(session.send(Output::Item(item)));
                             },
-                            WorkerResult::OneItemAndDone(item) => {
+                            Realize::OneItemAndDone(item) => {
                                 try!(session.send(Output::Item(item)));
                                 break;
                             },
-                            WorkerResult::ManyItems(iter) => {
+                            Realize::ManyItems(iter) => {
                                 for item in iter {
                                     try!(session.send(Output::Item(item)));
                                 }
                             },
-                            WorkerResult::ManyItemsAndDone(iter) => {
+                            Realize::ManyItemsAndDone(iter) => {
                                 for item in iter {
                                     try!(session.send(Output::Item(item)));
                                 }
                                 break;
                             },
-                            WorkerResult::Reject(reason) => 
-                                return Err(SessionError::RejectedByHandler(reason)),
+                            // Realize::Reject(reason) => 
+                            //    return Err(SessionError::RejectedByHandler(reason)),
                         }
                     }
                     
