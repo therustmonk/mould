@@ -114,7 +114,7 @@ impl<CTX: SessionData> Session<CTX> {
     }
 
     fn recv(&mut self) -> Result<Input, SessionError> {
-        let message: Message = match self.client.get_mut_reciever().recv_message() {
+        let message: Message = match self.client.get_mut_receiver().recv_message() {
             Ok(m) => m,
             Err(_) => return Err(SessionError::ConnectionBroken),
         };
