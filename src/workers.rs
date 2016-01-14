@@ -1,10 +1,21 @@
+use std::error::Error;
 pub use rustc_serialize::json::{Json, Object};
 use std::iter::Iterator;
 use session::{Request};
 
 pub type BoxedObjects = Box<Iterator<Item=Object>>;
 
-pub type WorkerResult<T> = Result<T, String>;
+pub enum WorkerError {
+    Reject(String)
+}
+
+pub type WorkerResult<T> = Result<T, WorkerError>;
+
+impl<E: Error> From<E> for WorkerError {
+    fn from(e: E) -> Self {
+        WorkerError::Reject(e.description().to_string())
+    }
+}
 
 pub enum Realize {
     ManyItems(BoxedObjects),
@@ -26,7 +37,7 @@ pub trait Worker<CTX> {
     }
     fn realize(&mut self, _: &mut CTX, _: Option<Request>)
         -> WorkerResult<Realize> {
-            Err("Worker unreachable state.".to_owned())
+            Err(WorkerError::Reject("Worker unreachable state.".to_string()))
     }
 }
 
@@ -43,7 +54,7 @@ impl RejectWorker {
 impl<CTX> Worker<CTX> for RejectWorker {
     fn shortcut(&mut self, _: &mut CTX)
         -> WorkerResult<Shortcut> {
-            Err(self.reason.clone())
+            Err(WorkerError::Reject(self.reason.clone()))
     }
 }
 

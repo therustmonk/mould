@@ -24,6 +24,7 @@ use websocket::receiver::Receiver;
 use websocket::dataframe::DataFrame;
 use websocket::stream::WebSocketStream;
 use websocket::ws::receiver::Receiver as WSReceiver;
+use workers::WorkerError;
 
 pub use rustc_serialize::json::{Json, ToJson, Object};
 
@@ -94,8 +95,8 @@ pub enum SessionError {
     RejectedByHandler(String),
 }
 
-impl From<String> for SessionError {
-    fn from(reason: String) -> Self {
+impl From<WorkerError> for SessionError {
+    fn from(WorkerError::Reject(reason): WorkerError) -> Self {
         SessionError::RejectedByHandler(reason)
     }
 }
