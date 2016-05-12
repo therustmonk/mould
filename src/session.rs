@@ -92,12 +92,12 @@ pub enum SessionError {
     Canceled,
     ConnectionBroken,
     ConnectionClosed,
-    RejectedByHandler(String),
+    RejectedByWorker(WorkerError),
 }
 
 impl From<WorkerError> for SessionError {
-    fn from(WorkerError::Reject(reason): WorkerError) -> Self {
-        SessionError::RejectedByHandler(reason)
+    fn from(error: WorkerError) -> Self {
+        SessionError::RejectedByWorker(error)
     }
 }
 

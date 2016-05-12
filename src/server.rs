@@ -6,7 +6,7 @@ use std::net::ToSocketAddrs;
 use websocket::Server;
 use session::{Session, SessionError, Output, SessionData};
 use handlers::Handler;
-use workers::{Realize, Shortcut};
+use workers::{Realize, Shortcut, WorkerError};
 
 pub type BoxedHandler<CTX> = Box<Handler<CTX> + Send + Sync>;
 pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
@@ -59,22 +59,12 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                     };
 
                     let mut worker = handler.build(request);
-                    /*
-                    let mut worker = match handler.build(request) {
-                        Ok(boxed) =>
-                            boxed,
-                        Err(reason) => 
-                            return Err(SessionError::RejectedByHandler(reason)),
-                    };
-                    */
 
                     match try!(worker.shortcut(session.borrow_mut_context())) {
                         Shortcut::Done => {
                             try!(session.send(Output::Done));
                             continue
                         },
-                        //Shortcut::Reject(reason) =>
-                        //    return Err(SessionError::RejectedByHandler(reason)),
                         Shortcut::Tuned =>
                             (),
                     }
@@ -102,8 +92,6 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                                 }
                                 break;
                             },
-                            // Realize::Reject(reason) => 
-                            //    return Err(SessionError::RejectedByHandler(reason)),
                         }
                     }
                     
@@ -116,7 +104,14 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                         SessionError::Canceled => continue,
                         SessionError::ConnectionBroken => break,
                         SessionError::ConnectionClosed => break,
-                        SessionError::RejectedByHandler(data) => data,
+                        SessionError::RejectedByWorker(WorkerError::Reject(reason)) => {
+                            debug!("Request rejected by worker {}", &reason);
+                            reason
+                        },
+                        SessionError::RejectedByWorker(WorkerError::Cause(cause)) => {
+                            warn!("Request rejected by cause {}", cause);
+                            "Internal error.".to_string()
+                        },
                         _ => {
                             warn!("Request workout {} have catch an error {:?}", ip, reason);        
                             format!("Rejected with {:?}", reason)

@@ -1,19 +1,31 @@
 use std::error::Error;
+use std::fmt;
 pub use rustc_serialize::json::{Json, Object};
 use std::iter::Iterator;
 use session::{Request};
 
 pub type BoxedObjects = Box<Iterator<Item=Object>>;
 
+#[derive(Debug)]
 pub enum WorkerError {
-    Reject(String)
+    Reject(String),
+    Cause(Box<Error>),
 }
 
-pub type WorkerResult<T> = Result<T, WorkerError>;
+impl fmt::Display for WorkerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &WorkerError::Reject(ref s) =>
+                write!(f, "Rejected by worker {}", s),
+            &WorkerError::Cause(ref e) =>
+                write!(f, "Rejected with cause {}", e),
+        }
+    }
+}
 
-impl<E: Error> From<E> for WorkerError {
+impl<E: Error + 'static> From<E> for WorkerError {
     fn from(e: E) -> Self {
-        WorkerError::Reject(e.description().to_string())
+        WorkerError::Cause(Box::new(e))
     }
 }
 
@@ -29,6 +41,8 @@ pub enum Shortcut {
     Tuned,
     Done,
 }
+
+pub type WorkerResult<T> = Result<T, WorkerError>;
 
 pub trait Worker<CTX> {
     fn shortcut(&mut self, _: &mut CTX)
