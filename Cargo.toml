@@ -1,6 +1,6 @@
 [package]
 name = "mould"
-version = "0.0.10"
+version = "0.0.11"
 readme = "README.md"
 authors = ["Denis Kolodin <deniskolodin@gmail.com>"]
 description = "Rust web-framework for websocket based web-apps."
@@ -8,8 +8,8 @@ repository = "https://github.com/DenisKolodin/mould"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-log = "~0.3.4"
+log = "~0.3.6"
 rustc-serialize = "~0.3.19"
-hyper = "~0.9.1"
-websocket = "~0.17.0"
+hyper = "~0.9.10"
+websocket = "~0.17.1"
 json_macro = "~0.1.1"
