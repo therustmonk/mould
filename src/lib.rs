@@ -12,6 +12,7 @@ pub mod handlers;
 pub mod workers;
 pub mod session;
 pub mod server;
+pub mod prelude;
 
 
 #[test]
