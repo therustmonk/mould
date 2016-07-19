@@ -12,6 +12,12 @@ pub enum WorkerError {
     Cause(Box<Error>),
 }
 
+impl WorkerError {
+    pub fn reject(msg: &str) -> Self {
+        WorkerError::Reject(msg.to_owned())
+    }
+}
+
 impl fmt::Display for WorkerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
