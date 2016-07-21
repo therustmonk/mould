@@ -20,13 +20,12 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
 
     for connection in server {
         let services = services.clone();
-    	thread::spawn(move || {
+        thread::spawn(move || {
             // Separate thread, safe to unwrap connection initialization
             let request = connection.unwrap().read_request().unwrap(); // Get the request
-            //let headers = request.headers.clone(); // Keep the headers so we can check them            
-            request.validate().unwrap(); // Validate the request            
+            //let headers = request.headers.clone(); // Keep the headers so we can check them
+            request.validate().unwrap(); // Validate the request
             let /*mut*/ response = request.accept(); // Form a response
-            
             /* TODO Protocols declaration
             if let Some(&WebSocketProtocol(ref protocols)) = headers.get() {
                 if protocols.contains(&("rust-websocket".to_string())) {
@@ -35,9 +34,7 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                 }
             }
             */
-            
             let mut client = response.send().unwrap(); // Send the response
-            
             let ip = client.get_mut_sender()
                 .get_mut()
                 .peer_addr()
@@ -94,12 +91,12 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                             },
                         }
                     }
-                    
+
                     try!(session.send(Output::Done));
 
                 })(&mut session);
-                // Inform user if 
-                if let Err(reason) = result {                    
+                // Inform user if
+                if let Err(reason) = result {
                     let text = match reason {
                         SessionError::Canceled => continue,
                         SessionError::ConnectionBroken => break,
@@ -113,10 +110,10 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                             "Internal error.".to_string()
                         },
                         _ => {
-                            warn!("Request workout {} have catch an error {:?}", ip, reason);        
+                            warn!("Request workout {} have catch an error {:?}", ip, reason);
                             format!("Rejected with {:?}", reason)
                         },
-                    };                    
+                    };
                     // Not need this connection. Safe to unwrap.
                     session.send(Output::Reject(text)).unwrap();
                 }
@@ -126,6 +123,6 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
             // Standard sequence! Only one task simultaneous!
             // Simple to debug, Simple to implement client, corresponds to websocket main principle!
 
-    	});
+        });
     }
 }

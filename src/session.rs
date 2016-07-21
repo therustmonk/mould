@@ -32,7 +32,7 @@ pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocke
 
 pub trait SessionData: Default + 'static {}
 
-pub struct Session<CTX> {
+pub struct Session<CTX: SessionData> {
     client: Client,
     context: CTX,
 }
@@ -169,7 +169,7 @@ impl<CTX: SessionData> Session<CTX> {
                                         payload: payload,
                                     };
                                     Some(request)
-                                },               
+                                },
                                 Some(Json::Null) =>
                                     None,
                                 Some(_) =>
@@ -185,7 +185,7 @@ impl<CTX: SessionData> Session<CTX> {
                         }
                     } else {
                         Err(SessionError::IllegalEventType)
-                    }                    
+                    }
 
                 } else {
                     Err(SessionError::IllegalJsonFormat)

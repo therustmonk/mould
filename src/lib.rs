@@ -1,6 +1,3 @@
-
-// ¯\_(ツ)_/¯
-
 #[macro_use]
 extern crate log;
 extern crate rustc_serialize;
@@ -13,8 +10,3 @@ pub mod workers;
 pub mod session;
 pub mod server;
 pub mod prelude;
-
-
-#[test]
-fn it_works() {
-}
