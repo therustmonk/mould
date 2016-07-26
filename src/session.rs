@@ -26,7 +26,7 @@ use websocket::stream::WebSocketStream;
 use websocket::ws::receiver::Receiver as WSReceiver;
 use workers::WorkerError;
 
-pub use rustc_serialize::json::{Json, ToJson, Object};
+use rustc_serialize::json::{Json, Object};
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 
@@ -222,13 +222,13 @@ impl<CTX: SessionData> Session<CTX> {
     pub fn send(&mut self, out: Output) -> Result<(), SessionError> {
         let json = match out {
             Output::Item(data) =>
-                json!({"event" => "item", "data" => data}),
+                mould_json!({"event" => "item", "data" => data}),
             Output::Ready =>
-                json!({"event" => "ready"}),
+                mould_json!({"event" => "ready"}),
             Output::Done =>
-                json!({"event" => "done"}),
+                mould_json!({"event" => "done"}),
             Output::Reject(message) =>
-                json!({"event" => "reject", "data" => message}),
+                mould_json!({"event" => "reject", "data" => message}),
         };
         let content = json.to_string();
         debug!("Send <= {}", content);

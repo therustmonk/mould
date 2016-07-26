@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fmt;
-pub use rustc_serialize::json::{Json, Object};
+use rustc_serialize::json::Object;
 use std::iter::Iterator;
 use session::{Request};
 

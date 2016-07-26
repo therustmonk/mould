@@ -2,9 +2,9 @@
 extern crate log;
 extern crate rustc_serialize;
 extern crate websocket;
-#[macro_use]
-extern crate json_macro;
 
+#[macro_use]
+pub mod macros;
 pub mod handlers;
 pub mod workers;
 pub mod session;
