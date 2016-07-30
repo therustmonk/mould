@@ -14,8 +14,9 @@
 //! * {"event": "reject", "data": {"message": "text_of_message"}}
 
 use std::default::Default;
-
+use std::ops::{Deref, DerefMut};
 use std::str;
+use rustc_serialize::json::{Json, Object};
 use websocket::Message;
 use websocket::Client as WSClient;
 use websocket::message::Type;
@@ -25,8 +26,6 @@ use websocket::dataframe::DataFrame;
 use websocket::stream::WebSocketStream;
 use websocket::ws::receiver::Receiver as WSReceiver;
 use workers::WorkerError;
-
-use rustc_serialize::json::{Json, Object};
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 
@@ -101,16 +100,26 @@ impl From<WorkerError> for SessionError {
     }
 }
 
+impl<CTX: SessionData> Deref for Session<CTX> {
+    type Target = CTX;
+
+    fn deref<'a>(&'a self) -> &'a CTX {
+        &self.context
+    }
+}
+
+impl<CTX: SessionData> DerefMut for Session<CTX> {
+    fn deref_mut<'a>(&'a mut self) -> &'a mut CTX {
+        &mut self.context
+    }
+}
+
 impl<CTX: SessionData> Session<CTX> {
     pub fn new(client: Client) -> Self {
         Session {
             client: client,
             context: CTX::default(),
         }
-    }
-
-    pub fn borrow_mut_context(&mut self) -> &mut CTX {
-        &mut self.context
     }
 
     fn recv(&mut self) -> Result<Input, SessionError> {

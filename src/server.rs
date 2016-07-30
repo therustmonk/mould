@@ -35,10 +35,7 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
             }
             */
             let mut client = response.send().unwrap(); // Send the response
-            let ip = client.get_mut_sender()
-                .get_mut()
-                .peer_addr()
-                .unwrap();
+            let ip = client.get_mut_sender().get_mut().peer_addr().unwrap();
 
             debug!("Connection from {}", ip);
 
@@ -57,7 +54,7 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
 
                     let mut worker = handler.build(request);
 
-                    match try!(worker.shortcut(session.borrow_mut_context())) {
+                    match try!(worker.shortcut(session)) {
                         Shortcut::Done => {
                             try!(session.send(Output::Done));
                             continue
@@ -69,7 +66,7 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                     loop {
                         try!(session.send(Output::Ready));
                         let option_request = try!(session.recv_next());
-                        match try!(worker.realize(session.borrow_mut_context(), option_request)) {
+                        match try!(worker.realize(session, option_request)) {
                             Realize::Done => break,
                             Realize::OneItem(item) => {
                                 try!(session.send(Output::Item(item)));
