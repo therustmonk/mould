@@ -25,7 +25,7 @@ use websocket::receiver::Receiver;
 use websocket::dataframe::DataFrame;
 use websocket::stream::WebSocketStream;
 use websocket::ws::receiver::Receiver as WSReceiver;
-use workers::WorkerError;
+use worker::WorkerError;
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 

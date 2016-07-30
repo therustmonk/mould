@@ -6,7 +6,7 @@ use std::net::ToSocketAddrs;
 use websocket::Server;
 use session::{Session, SessionError, Output, SessionData};
 use router::Router;
-use workers::{Realize, Shortcut, WorkerError};
+use worker::{Realize, Shortcut, WorkerError};
 
 pub type BoxedRouter<CTX> = Box<Router<CTX> + Send + Sync>;
 pub type ServicesMap<CTX> = HashMap<String, BoxedRouter<CTX>>;

@@ -1,5 +1,5 @@
-use workers::Worker;
 use session::Request;
+use worker::Worker;
 
 /// Router looks into session or request to build corresponding worker.
 pub trait Router<CTX> {
