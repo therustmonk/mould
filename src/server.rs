@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 
 use websocket::Server;
-use session::{Session, SessionError, Output, SessionData};
+use session::{self, Session, Output, SessionData};
 use router::Router;
 use worker::{self, Realize, Shortcut};
 
@@ -45,11 +45,11 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
             debug!("Start session for {}", ip);
             loop { // Session loop
                 debug!("Begin new request workout for {}", ip);
-                let result: Result<(), SessionError> = (|session: &mut Session<CTX>| loop { // Request loop
+                let result: Result<(), session::Error> = (|session: &mut Session<CTX>| loop { // Request loop
                     let (service, request) = try!(session.recv_request());
                     let router = match services.get(&service) {
                         Some(value) => value,
-                        None => return Err(SessionError::ServiceNotFound),
+                        None => return Err(session::Error::ServiceNotFound),
                     };
 
                     let mut worker = router.route(session, &request);
@@ -94,14 +94,14 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                 // Inform user if
                 if let Err(reason) = result {
                     let text = match reason {
-                        SessionError::Canceled => continue,
-                        SessionError::ConnectionBroken => break,
-                        SessionError::ConnectionClosed => break,
-                        SessionError::RejectedByWorker(worker::Error::Reject(reason)) => {
+                        session::Error::Canceled => continue,
+                        session::Error::ConnectionBroken => break,
+                        session::Error::ConnectionClosed => break,
+                        session::Error::RejectedByWorker(worker::Error::Reject(reason)) => {
                             debug!("Request rejected by worker {}", &reason);
                             reason
                         },
-                        SessionError::RejectedByWorker(worker::Error::Cause(cause)) => {
+                        session::Error::RejectedByWorker(worker::Error::Cause(cause)) => {
                             warn!("Request rejected by cause {}", cause);
                             "Internal error.".to_string()
                         },

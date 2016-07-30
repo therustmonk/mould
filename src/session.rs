@@ -77,7 +77,7 @@ pub enum Output {
 }
 
 #[derive(Debug)]
-pub enum SessionError {
+pub enum Error {
     IllegalJsonFormat,
     IllegalEventType,
     IllegalEventName(String),
@@ -94,9 +94,9 @@ pub enum SessionError {
     RejectedByWorker(worker::Error),
 }
 
-impl From<worker::Error> for SessionError {
+impl From<worker::Error> for Error {
     fn from(error: worker::Error) -> Self {
-        SessionError::RejectedByWorker(error)
+        Error::RejectedByWorker(error)
     }
 }
 
@@ -122,16 +122,16 @@ impl<CTX: SessionData> Session<CTX> {
         }
     }
 
-    fn recv(&mut self) -> Result<Input, SessionError> {
+    fn recv(&mut self) -> Result<Input, Error> {
         let message: Message = match self.client.get_mut_receiver().recv_message() {
             Ok(m) => m,
-            Err(_) => return Err(SessionError::ConnectionBroken),
+            Err(_) => return Err(Error::ConnectionBroken),
         };
         match message.opcode {
             Type::Text => {
                 let content = match str::from_utf8(&*message.payload) {
                     Ok(data) => data,
-                    Err(_) => return Err(SessionError::BadMessageEncoding),
+                    Err(_) => return Err(Error::BadMessageEncoding),
                 };
                 debug!("Recv => {}", content);
                 if let Ok(Json::Object(mut data)) = Json::from_str(&content) {
@@ -141,15 +141,15 @@ impl<CTX: SessionData> Session<CTX> {
                                 Some(Json::Object(mut data)) => {
                                     let service = match data.remove("service") {
                                         Some(Json::String(data)) => data,
-                                        _ => return Err(SessionError::IllegalRequestFormat),
+                                        _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let action = match data.remove("action") {
                                         Some(Json::String(data)) => data,
-                                        _ => return Err(SessionError::IllegalRequestFormat),
+                                        _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let payload = match data.remove("payload") {
                                         Some(Json::Object(data)) => data,
-                                        _ => return Err(SessionError::IllegalRequestFormat),
+                                        _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let request = Request {
                                         action: action,
@@ -158,20 +158,20 @@ impl<CTX: SessionData> Session<CTX> {
                                     Ok(Input::Request(service, request))
                                 },
                                 Some(_) =>
-                                    Err(SessionError::IllegalDataFormat),
+                                    Err(Error::IllegalDataFormat),
                                 None =>
-                                    Err(SessionError::DataNotProvided),
+                                    Err(Error::DataNotProvided),
                             }
                         } else if event == "next" {
                             let request = match data.remove("data") {
                                 Some(Json::Object(mut data)) => {
                                     let action = match data.remove("action") {
                                         Some(Json::String(data)) => data,
-                                        _ => return Err(SessionError::IllegalRequestFormat),
+                                        _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let payload = match data.remove("payload") {
                                         Some(Json::Object(data)) => data,
-                                        _ => return Err(SessionError::IllegalRequestFormat),
+                                        _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let request = Request {
                                         action: action,
@@ -182,53 +182,53 @@ impl<CTX: SessionData> Session<CTX> {
                                 Some(Json::Null) =>
                                     None,
                                 Some(_) =>
-                                    return Err(SessionError::IllegalDataFormat),
+                                    return Err(Error::IllegalDataFormat),
                                 None =>
                                     None,
                             };
                             Ok(Input::Next(request))
                         } else if event == "cancel" {
-                           Err(SessionError::Canceled)
+                           Err(Error::Canceled)
                         } else {
-                            Err(SessionError::IllegalEventName(event))
+                            Err(Error::IllegalEventName(event))
                         }
                     } else {
-                        Err(SessionError::IllegalEventType)
+                        Err(Error::IllegalEventType)
                     }
 
                 } else {
-                    Err(SessionError::IllegalJsonFormat)
+                    Err(Error::IllegalJsonFormat)
                 }
             },
             Type::Ping => {
                 match self.client.send_message(&Message::pong(message.payload)) {
                     Ok(_) => self.recv(),
-                    Err(_) => Err(SessionError::ConnectionBroken),
+                    Err(_) => Err(Error::ConnectionBroken),
                 }
             },
-            Type::Binary => Err(SessionError::IllegalMessage),
-            Type::Pong => Err(SessionError::IllegalMessage), // we don't send pings!
-            Type::Close => Err(SessionError::ConnectionClosed),
+            Type::Binary => Err(Error::IllegalMessage),
+            Type::Pong => Err(Error::IllegalMessage), // we don't send pings!
+            Type::Close => Err(Error::ConnectionClosed),
         }
     }
 
-    pub fn recv_request(&mut self) -> Result<(String, Request), SessionError> {
+    pub fn recv_request(&mut self) -> Result<(String, Request), Error> {
         match self.recv() {
             Ok(Input::Request(service, request)) => Ok((service, request)),
-            Ok(_) => Err(SessionError::UnexpectedState),
+            Ok(_) => Err(Error::UnexpectedState),
             Err(ie) => Err(ie),
         }
     }
 
-    pub fn recv_next(&mut self) -> Result<Option<Request>, SessionError> {
+    pub fn recv_next(&mut self) -> Result<Option<Request>, Error> {
         match self.recv() {
             Ok(Input::Next(req)) => Ok(req),
-            Ok(_) => Err(SessionError::UnexpectedState),
+            Ok(_) => Err(Error::UnexpectedState),
             Err(ie) => Err(ie),
         }
     }
 
-    pub fn send(&mut self, out: Output) -> Result<(), SessionError> {
+    pub fn send(&mut self, out: Output) -> Result<(), Error> {
         let json = match out {
             Output::Item(data) =>
                 mould_json!({"event" => "item", "data" => data}),
@@ -243,7 +243,7 @@ impl<CTX: SessionData> Session<CTX> {
         debug!("Send <= {}", content);
         match self.client.send_message(&Message::text(content)) {
             Ok(_) => Ok(()),
-            Err(_) => Err(SessionError::ConnectionBroken),
+            Err(_) => Err(Error::ConnectionBroken),
         }
     }
 
