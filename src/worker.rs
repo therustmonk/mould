@@ -1,4 +1,5 @@
-use std::error::Error;
+use std::error;
+use std::result;
 use std::fmt;
 use rustc_serialize::json::Object;
 use std::iter::Iterator;
@@ -7,31 +8,31 @@ use session::{Request};
 pub type BoxedObjects = Box<Iterator<Item=Object>>;
 
 #[derive(Debug)]
-pub enum WorkerError {
+pub enum Error {
     Reject(String),
-    Cause(Box<Error>),
+    Cause(Box<error::Error>),
 }
 
-impl WorkerError {
+impl Error {
     pub fn reject(msg: &str) -> Self {
-        WorkerError::Reject(msg.to_owned())
+        Error::Reject(msg.to_owned())
     }
 }
 
-impl fmt::Display for WorkerError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &WorkerError::Reject(ref s) =>
+            &Error::Reject(ref s) =>
                 write!(f, "Rejected by worker {}", s),
-            &WorkerError::Cause(ref e) =>
+            &Error::Cause(ref e) =>
                 write!(f, "Rejected with cause {}", e),
         }
     }
 }
 
-impl<E: Error + 'static> From<E> for WorkerError {
+impl<E: error::Error + 'static> From<E> for Error {
     fn from(e: E) -> Self {
-        WorkerError::Cause(Box::new(e))
+        Error::Cause(Box::new(e))
     }
 }
 
@@ -48,14 +49,14 @@ pub enum Shortcut {
     Done,
 }
 
-pub type WorkerResult<T> = Result<T, WorkerError>;
+pub type Result<T> = result::Result<T, Error>;
 
 pub trait Worker<CTX> {
-    fn prepare(&mut self, _: &mut CTX, _: Request) -> WorkerResult<Shortcut> {
+    fn prepare(&mut self, _: &mut CTX, _: Request) -> Result<Shortcut> {
         Ok(Shortcut::Tuned)
     }
-    fn realize(&mut self, _: &mut CTX, _: Option<Request>) -> WorkerResult<Realize> {
-        Err(WorkerError::reject("Illegal worker state!"))
+    fn realize(&mut self, _: &mut CTX, _: Option<Request>) -> Result<Realize> {
+        Err(Error::reject("Illegal worker state!"))
     }
 }
 
@@ -71,8 +72,8 @@ impl RejectWorker {
 
 impl<CTX> Worker<CTX> for RejectWorker {
     fn realize(&mut self, _: &mut CTX, _: Option<Request>)
-        -> WorkerResult<Realize> {
-            Err(WorkerError::Reject(self.reason.clone()))
+        -> Result<Realize> {
+            Err(Error::Reject(self.reason.clone()))
     }
 }
 

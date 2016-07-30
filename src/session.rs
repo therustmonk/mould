@@ -25,7 +25,7 @@ use websocket::receiver::Receiver;
 use websocket::dataframe::DataFrame;
 use websocket::stream::WebSocketStream;
 use websocket::ws::receiver::Receiver as WSReceiver;
-use worker::WorkerError;
+use worker;
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 
@@ -91,11 +91,11 @@ pub enum SessionError {
     Canceled,
     ConnectionBroken,
     ConnectionClosed,
-    RejectedByWorker(WorkerError),
+    RejectedByWorker(worker::Error),
 }
 
-impl From<WorkerError> for SessionError {
-    fn from(error: WorkerError) -> Self {
+impl From<worker::Error> for SessionError {
+    fn from(error: worker::Error) -> Self {
         SessionError::RejectedByWorker(error)
     }
 }

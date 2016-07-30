@@ -6,7 +6,7 @@ use std::net::ToSocketAddrs;
 use websocket::Server;
 use session::{Session, SessionError, Output, SessionData};
 use router::Router;
-use worker::{Realize, Shortcut, WorkerError};
+use worker::{self, Realize, Shortcut};
 
 pub type BoxedRouter<CTX> = Box<Router<CTX> + Send + Sync>;
 pub type ServicesMap<CTX> = HashMap<String, BoxedRouter<CTX>>;
@@ -97,11 +97,11 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                         SessionError::Canceled => continue,
                         SessionError::ConnectionBroken => break,
                         SessionError::ConnectionClosed => break,
-                        SessionError::RejectedByWorker(WorkerError::Reject(reason)) => {
+                        SessionError::RejectedByWorker(worker::Error::Reject(reason)) => {
                             debug!("Request rejected by worker {}", &reason);
                             reason
                         },
-                        SessionError::RejectedByWorker(WorkerError::Cause(cause)) => {
+                        SessionError::RejectedByWorker(worker::Error::Cause(cause)) => {
                             warn!("Request rejected by cause {}", cause);
                             "Internal error.".to_string()
                         },
