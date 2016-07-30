@@ -5,8 +5,8 @@ extern crate websocket;
 
 #[macro_use]
 pub mod macros;
-pub mod handlers;
-pub mod workers;
+pub mod router;
+pub mod worker;
 pub mod session;
 pub mod server;
 pub mod prelude;

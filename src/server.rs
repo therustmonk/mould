@@ -4,12 +4,12 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 
 use websocket::Server;
-use session::{Session, SessionError, Output, SessionData};
-use handlers::Handler;
-use workers::{Realize, Shortcut, WorkerError};
+use session::{self, Session, Output, SessionData};
+use router::Router;
+use worker::{self, Realize, Shortcut};
 
-pub type BoxedHandler<CTX> = Box<Handler<CTX> + Send + Sync>;
-pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
+pub type BoxedRouter<CTX> = Box<Router<CTX> + Send + Sync>;
+pub type ServicesMap<CTX> = HashMap<String, BoxedRouter<CTX>>;
 
 
 pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMap<CTX>) {
@@ -45,22 +45,21 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
             debug!("Start session for {}", ip);
             loop { // Session loop
                 debug!("Begin new request workout for {}", ip);
-                let result: Result<(), SessionError> = (|session: &mut Session<CTX>| loop { // Request loop
+                let result: Result<(), session::Error> = (|session: &mut Session<CTX>| loop { // Request loop
                     let (service, request) = try!(session.recv_request());
-                    let handler = match services.get(&service) {
+                    let router = match services.get(&service) {
                         Some(value) => value,
-                        None => return Err(SessionError::ServiceNotFound),
+                        None => return Err(session::Error::ServiceNotFound),
                     };
 
-                    let mut worker = handler.build(request);
+                    let mut worker = router.route(session, &request);
 
-                    match try!(worker.shortcut(session)) {
+                    match try!(worker.prepare(session, request)) {
                         Shortcut::Done => {
                             try!(session.send(Output::Done));
                             continue
                         },
-                        Shortcut::Tuned =>
-                            (),
+                        Shortcut::Tuned => (),
                     }
 
                     loop {
@@ -95,14 +94,14 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                 // Inform user if
                 if let Err(reason) = result {
                     let text = match reason {
-                        SessionError::Canceled => continue,
-                        SessionError::ConnectionBroken => break,
-                        SessionError::ConnectionClosed => break,
-                        SessionError::RejectedByWorker(WorkerError::Reject(reason)) => {
+                        session::Error::Canceled => continue,
+                        session::Error::ConnectionBroken => break,
+                        session::Error::ConnectionClosed => break,
+                        session::Error::RejectedByWorker(worker::Error::Reject(reason)) => {
                             debug!("Request rejected by worker {}", &reason);
                             reason
                         },
-                        SessionError::RejectedByWorker(WorkerError::Cause(cause)) => {
+                        session::Error::RejectedByWorker(worker::Error::Cause(cause)) => {
                             warn!("Request rejected by cause {}", cause);
                             "Internal error.".to_string()
                         },
