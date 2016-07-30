@@ -51,29 +51,27 @@ pub enum Shortcut {
 pub type WorkerResult<T> = Result<T, WorkerError>;
 
 pub trait Worker<CTX> {
-    fn shortcut(&mut self, _: &mut CTX)
-        -> WorkerResult<Shortcut> {
-            Ok(Shortcut::Tuned)
+    fn prepare(&mut self, _: &mut CTX, _: Request) -> WorkerResult<Shortcut> {
+        Ok(Shortcut::Tuned)
     }
-    fn realize(&mut self, _: &mut CTX, _: Option<Request>)
-        -> WorkerResult<Realize> {
-            Err(WorkerError::Reject("Worker unreachable state.".to_string()))
+    fn realize(&mut self, _: &mut CTX, _: Option<Request>) -> WorkerResult<Realize> {
+        Err(WorkerError::reject("Illegal worker state!"))
     }
 }
 
 pub struct RejectWorker {
-	reason: String,
+    reason: String,
 }
 
 impl RejectWorker {
-	pub fn new(reason: String) -> Self {
-		RejectWorker {reason: reason}
-	}
+    pub fn new(reason: String) -> Self {
+        RejectWorker {reason: reason}
+    }
 }
 
 impl<CTX> Worker<CTX> for RejectWorker {
-    fn shortcut(&mut self, _: &mut CTX)
-        -> WorkerResult<Shortcut> {
+    fn realize(&mut self, _: &mut CTX, _: Option<Request>)
+        -> WorkerResult<Realize> {
             Err(WorkerError::Reject(self.reason.clone()))
     }
 }

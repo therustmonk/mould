@@ -54,13 +54,12 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
 
                     let mut worker = router.route(session, &request);
 
-                    match try!(worker.shortcut(session)) {
+                    match try!(worker.prepare(session, request)) {
                         Shortcut::Done => {
                             try!(session.send(Output::Done));
                             continue
                         },
-                        Shortcut::Tuned =>
-                            (),
+                        Shortcut::Tuned => (),
                     }
 
                     loop {
