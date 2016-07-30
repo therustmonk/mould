@@ -5,11 +5,11 @@ use std::net::ToSocketAddrs;
 
 use websocket::Server;
 use session::{Session, SessionError, Output, SessionData};
-use handlers::Handler;
+use router::Router;
 use workers::{Realize, Shortcut, WorkerError};
 
-pub type BoxedHandler<CTX> = Box<Handler<CTX> + Send + Sync>;
-pub type ServicesMap<CTX> = HashMap<String, BoxedHandler<CTX>>;
+pub type BoxedRouter<CTX> = Box<Router<CTX> + Send + Sync>;
+pub type ServicesMap<CTX> = HashMap<String, BoxedRouter<CTX>>;
 
 
 pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMap<CTX>) {
@@ -47,12 +47,12 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                 debug!("Begin new request workout for {}", ip);
                 let result: Result<(), SessionError> = (|session: &mut Session<CTX>| loop { // Request loop
                     let (service, request) = try!(session.recv_request());
-                    let handler = match services.get(&service) {
+                    let router = match services.get(&service) {
                         Some(value) => value,
                         None => return Err(SessionError::ServiceNotFound),
                     };
 
-                    let mut worker = handler.build(request);
+                    let mut worker = router.route(session, &request);
 
                     match try!(worker.shortcut(session)) {
                         Shortcut::Done => {

@@ -1,6 +1,6 @@
 //! Minimal set of imports to implement handler with workers.
 
-pub use handlers::Handler;
+pub use router::Router;
 
 pub use session::Request;
 pub use session::Extractor;
