@@ -51,11 +51,11 @@ pub enum Shortcut {
 
 pub type Result<T> = result::Result<T, Error>;
 
-pub trait Worker<CTX> {
-    fn prepare(&mut self, _: &mut CTX, _: Request) -> Result<Shortcut> {
+pub trait Worker<T> {
+    fn prepare(&mut self, _: &mut T, _: Request) -> Result<Shortcut> {
         Ok(Shortcut::Tuned)
     }
-    fn realize(&mut self, _: &mut CTX, _: Option<Request>) -> Result<Realize> {
+    fn realize(&mut self, _: &mut T, _: Option<Request>) -> Result<Realize> {
         Err(Error::reject("Illegal worker state!"))
     }
 }
@@ -70,8 +70,8 @@ impl RejectWorker {
     }
 }
 
-impl<CTX> Worker<CTX> for RejectWorker {
-    fn realize(&mut self, _: &mut CTX, _: Option<Request>)
+impl<T> Worker<T> for RejectWorker {
+    fn realize(&mut self, _: &mut T, _: Option<Request>)
         -> Result<Realize> {
             Err(Error::Reject(self.reason.clone()))
     }

@@ -4,19 +4,19 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 
 use websocket::Server;
-use session::{self, Session, Output, SessionBuilder, SessionData};
 use router::Router;
+use session::{self, Context, Output, Builder, Session};
 use worker::{self, Realize, Shortcut};
 
-pub type BoxedRouter<CTX> = Box<Router<CTX> + Send + Sync>;
+pub type BoxedRouter<T> = Box<Router<T> + Send + Sync>;
 
-pub struct Suite<T: SessionBuilder<CTX>, CTX: SessionData> {
-    builder: T,
-    services: HashMap<String, BoxedRouter<CTX>>,
+pub struct Suite<T: Session, B: Builder<T>> {
+    builder: B,
+    services: HashMap<String, BoxedRouter<T>>,
 }
 
-pub fn start<T, B, CTX>(addr: T, suite: Suite<B, CTX>)
-    where T: ToSocketAddrs, B: SessionBuilder<CTX>, CTX: SessionData {
+pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
+    where A: ToSocketAddrs, B: Builder<T>, T: Session {
     // CLIENTS HANDLING
     // Fail if can't bind, safe to unwrap
     let server = Server::bind(addr).unwrap();
@@ -43,13 +43,13 @@ pub fn start<T, B, CTX>(addr: T, suite: Suite<B, CTX>)
 
             debug!("Connection from {}", ip);
 
-            let mut session: Session<CTX> = Session::new(client, suite.builder.build());
+            let mut session: Context<T> = Context::new(client, suite.builder.build());
             // TODO Determine handler by action name (refactoring handler needed)
 
             debug!("Start session for {}", ip);
             loop { // Session loop
                 debug!("Begin new request workout for {}", ip);
-                let result: Result<(), session::Error> = (|session: &mut Session<CTX>| loop { // Request loop
+                let result: Result<(), session::Error> = (|session: &mut Context<T>| loop { // Request loop
                     let (name, request) = try!(session.recv_request());
                     let router = match suite.services.get(&name) {
                         Some(value) => value,

@@ -1,4 +1,4 @@
-//! Session module contains protocol implementation.
+//! Context module contains protocol implementation.
 //!
 //! Server can receive the following messages from clients:
 //!
@@ -29,23 +29,23 @@ use worker;
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 
-pub trait SessionBuilder<CTX: SessionData>: Send + Sync + 'static {
-    fn build(&self) -> CTX;
+pub trait Builder<T: Session>: Send + Sync + 'static {
+    fn build(&self) -> T;
 }
 
 pub struct DefaultBuilder { }
 
-impl<CTX: SessionData + Default> SessionBuilder<CTX> for DefaultBuilder {
-    fn build(&self) -> CTX {
-        CTX::default()
+impl<T: Session + Default> Builder<T> for DefaultBuilder {
+    fn build(&self) -> T {
+        T::default()
     }
 }
 
-pub trait SessionData: 'static {}
+pub trait Session: 'static {}
 
-pub struct Session<CTX: SessionData> {
+pub struct Context<T: Session> {
     client: Client,
-    context: CTX,
+    session: T,
 }
 
 pub struct Request {
@@ -112,25 +112,25 @@ impl From<worker::Error> for Error {
     }
 }
 
-impl<CTX: SessionData> Deref for Session<CTX> {
-    type Target = CTX;
+impl<T: Session> Deref for Context<T> {
+    type Target = T;
 
-    fn deref<'a>(&'a self) -> &'a CTX {
-        &self.context
+    fn deref<'a>(&'a self) -> &'a T {
+        &self.session
     }
 }
 
-impl<CTX: SessionData> DerefMut for Session<CTX> {
-    fn deref_mut<'a>(&'a mut self) -> &'a mut CTX {
-        &mut self.context
+impl<T: Session> DerefMut for Context<T> {
+    fn deref_mut<'a>(&'a mut self) -> &'a mut T {
+        &mut self.session
     }
 }
 
-impl<CTX: SessionData> Session<CTX> {
-    pub fn new(client: Client, context: CTX) -> Self {
-        Session {
+impl<T: Session> Context<T> {
+    pub fn new(client: Client, session: T) -> Self {
+        Context {
             client: client,
-            context: context,
+            session: session,
         }
     }
 
