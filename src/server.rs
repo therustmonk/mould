@@ -4,22 +4,26 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 
 use websocket::Server;
-use session::{self, Session, Output, SessionData};
+use session::{self, Session, Output, SessionBuilder, SessionData};
 use router::Router;
 use worker::{self, Realize, Shortcut};
 
 pub type BoxedRouter<CTX> = Box<Router<CTX> + Send + Sync>;
-pub type ServicesMap<CTX> = HashMap<String, BoxedRouter<CTX>>;
 
+pub struct Suite<T: SessionBuilder<CTX>, CTX: SessionData> {
+    builder: T,
+    services: HashMap<String, BoxedRouter<CTX>>,
+}
 
-pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMap<CTX>) {
+pub fn start<T, B, CTX>(addr: T, suite: Suite<B, CTX>)
+    where T: ToSocketAddrs, B: SessionBuilder<CTX>, CTX: SessionData {
     // CLIENTS HANDLING
     // Fail if can't bind, safe to unwrap
     let server = Server::bind(addr).unwrap();
-    let services = Arc::new(services);
+    let suite = Arc::new(suite);
 
     for connection in server {
-        let services = services.clone();
+        let suite = suite.clone();
         thread::spawn(move || {
             // Separate thread, safe to unwrap connection initialization
             let request = connection.unwrap().read_request().unwrap(); // Get the request
@@ -39,15 +43,15 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
 
             debug!("Connection from {}", ip);
 
-            let mut session: Session<CTX> = Session::new(client);
+            let mut session: Session<CTX> = Session::new(client, suite.builder.build());
             // TODO Determine handler by action name (refactoring handler needed)
 
             debug!("Start session for {}", ip);
             loop { // Session loop
                 debug!("Begin new request workout for {}", ip);
                 let result: Result<(), session::Error> = (|session: &mut Session<CTX>| loop { // Request loop
-                    let (service, request) = try!(session.recv_request());
-                    let router = match services.get(&service) {
+                    let (name, request) = try!(session.recv_request());
+                    let router = match suite.services.get(&name) {
                         Some(value) => value,
                         None => return Err(session::Error::ServiceNotFound),
                     };

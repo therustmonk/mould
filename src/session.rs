@@ -13,9 +13,8 @@
 //! * {"event": "done"}
 //! * {"event": "reject", "data": {"message": "text_of_message"}}
 
-use std::default::Default;
-use std::ops::{Deref, DerefMut};
 use std::str;
+use std::ops::{Deref, DerefMut};
 use rustc_serialize::json::{Json, Object};
 use websocket::Message;
 use websocket::Client as WSClient;
@@ -29,7 +28,11 @@ use worker;
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 
-pub trait SessionData: Default + 'static {}
+pub trait SessionBuilder<CTX: SessionData>: Send + Sync + 'static {
+    fn build(&self) -> CTX;
+}
+
+pub trait SessionData: 'static {}
 
 pub struct Session<CTX: SessionData> {
     client: Client,
@@ -115,10 +118,10 @@ impl<CTX: SessionData> DerefMut for Session<CTX> {
 }
 
 impl<CTX: SessionData> Session<CTX> {
-    pub fn new(client: Client) -> Self {
+    pub fn new(client: Client, context: CTX) -> Self {
         Session {
             client: client,
-            context: CTX::default(),
+            context: context,
         }
     }
 
