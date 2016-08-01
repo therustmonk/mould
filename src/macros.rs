@@ -1,25 +1,21 @@
 //! This implementation was borrowed from https://github.com/DenisKolodin/json_macro
 
-pub use rustc_serialize::json::{Json, Array, Object, ToJson};
-
-extern crate rustc_serialize;
-
 #[macro_export]
 macro_rules! mould_json {
     ([$($val:tt),*]) => {{
-        use $crate::macros::{Json, Array};
+        use $crate::rustc_serialize::json::{Json, Array};
         let mut array = Array::new();
         $( array.push(mould_json!($val)); )*
         Json::Array(array)
     }};
     ({ $($key:expr => $val:tt),* }) => {{
-        use $crate::macros::{Json, Object};
+        use $crate::rustc_serialize::json::{Json, Object};
         let mut object = Object::new();
         $( object.insert($key.to_owned(), mould_json!($val)); )*
         Json::Object(object)
     }};
     ($val:expr) => {{
-        use $crate::macros::ToJson;
+        use $crate::rustc_serialize::json::ToJson;
         $val.to_json()
     }};
 }
@@ -27,7 +23,7 @@ macro_rules! mould_json {
 #[macro_export]
 macro_rules! mould_object {
     { $($key:expr => $val:tt),* } => {{
-        use $crate::macros::Object;
+        use $crate::rustc_serialize::json::Object;
         let mut object = Object::new();
         $( object.insert($key.to_owned(), mould_json!($val)); )*
         object
@@ -36,7 +32,6 @@ macro_rules! mould_object {
 
 
 mod test {
-
     #[test]
     fn test_json_plain() {
         use rustc_serialize::json::{Json};
