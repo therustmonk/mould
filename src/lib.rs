@@ -12,3 +12,4 @@ pub mod server;
 pub mod prelude;
 
 pub use session::Session;
+pub use session::Builder;

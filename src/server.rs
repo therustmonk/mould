@@ -8,11 +8,29 @@ use router::Router;
 use session::{self, Context, Output, Builder, Session};
 use worker::{self, Realize, Shortcut};
 
-pub type BoxedRouter<T> = Box<Router<T> + Send + Sync>;
+// If add Sync and Send restrictions to Router trait,
+// than user have to implement it directly, but
+// this restrictions will derived automatically for
+// any type, because there aren't any mutable operation here
+type BoxedRouter<T> = Box<Router<T> + Send + Sync>;
 
 pub struct Suite<T: Session, B: Builder<T>> {
     builder: B,
     services: HashMap<String, BoxedRouter<T>>,
+}
+
+impl<T: Session, B: Builder<T>> Suite<T, B> {
+
+    pub fn new(builder: B) -> Self {
+        Suite {
+            builder: builder,
+            services: HashMap::new(),
+        }
+    }
+
+    pub fn register<R: Router<T> + Send + Sync>(&mut self, name: &str, router: R) {
+        self.services.insert(name.to_owned(), Box::new(router));
+    }
 }
 
 pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
