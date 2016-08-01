@@ -14,6 +14,7 @@
 //! * {"event": "reject", "data": {"message": "text_of_message"}}
 
 use std::str;
+use std::default::Default;
 use std::ops::{Deref, DerefMut};
 use rustc_serialize::json::{Json, Object};
 use websocket::Message;
@@ -30,6 +31,14 @@ pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocke
 
 pub trait SessionBuilder<CTX: SessionData>: Send + Sync + 'static {
     fn build(&self) -> CTX;
+}
+
+pub struct DefaultBuilder { }
+
+impl<CTX: SessionData + Default> SessionBuilder<CTX> for DefaultBuilder {
+    fn build(&self) -> CTX {
+        CTX::default()
+    }
 }
 
 pub trait SessionData: 'static {}
