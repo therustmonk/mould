@@ -4,19 +4,19 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 
 use websocket::Server;
-use router::Router;
+use service::Service;
 use session::{self, Context, Output, Builder, Session};
 use worker::{self, Realize, Shortcut};
 
-// If add Sync and Send restrictions to Router trait,
+// If add Sync and Send restrictions to Service trait,
 // than user have to implement it directly, but
 // this restrictions will derived automatically for
 // any type, because there aren't any mutable operation here
-type BoxedRouter<T> = Box<Router<T> + Send + Sync>;
+type BoxedService<T> = Box<Service<T> + Send + Sync>;
 
 pub struct Suite<T: Session, B: Builder<T>> {
     builder: B,
-    services: HashMap<String, BoxedRouter<T>>,
+    services: HashMap<String, BoxedService<T>>,
 }
 
 impl<T: Session, B: Builder<T>> Suite<T, B> {
@@ -28,8 +28,8 @@ impl<T: Session, B: Builder<T>> Suite<T, B> {
         }
     }
 
-    pub fn register<R: Router<T> + Send + Sync>(&mut self, name: &str, router: R) {
-        self.services.insert(name.to_owned(), Box::new(router));
+    pub fn register<S: Service<T> + Send + Sync>(&mut self, name: &str, service: S) {
+        self.services.insert(name.to_owned(), Box::new(service));
     }
 }
 
@@ -69,12 +69,12 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
                 debug!("Begin new request workout for {}", ip);
                 let result: Result<(), session::Error> = (|session: &mut Context<T>| loop { // Request loop
                     let (name, request) = try!(session.recv_request());
-                    let router = match suite.services.get(&name) {
+                    let service = match suite.services.get(&name) {
                         Some(value) => value,
                         None => return Err(session::Error::ServiceNotFound),
                     };
 
-                    let mut worker = router.route(&request);
+                    let mut worker = service.route(&request);
 
                     match try!(worker.prepare(session, request)) {
                         Shortcut::Done => {

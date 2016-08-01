@@ -3,7 +3,7 @@
 pub use session::Request;
 pub use session::Extractor;
 
-pub use router::Router;
+pub use service::Service;
 
 pub use worker; // for Result and Error
 pub use worker::Worker;
