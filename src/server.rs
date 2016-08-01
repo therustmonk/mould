@@ -52,7 +52,7 @@ pub fn start<To: ToSocketAddrs, CTX: SessionData>(addr: To, services: ServicesMa
                         None => return Err(session::Error::ServiceNotFound),
                     };
 
-                    let mut worker = router.route(session, &request);
+                    let mut worker = router.route(&request);
 
                     match try!(worker.prepare(session, request)) {
                         Shortcut::Done => {
