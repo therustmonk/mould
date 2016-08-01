@@ -10,3 +10,5 @@ pub mod worker;
 pub mod session;
 pub mod server;
 pub mod prelude;
+
+pub use session::Session;
