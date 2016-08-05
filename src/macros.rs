@@ -30,6 +30,20 @@ macro_rules! mould_object {
     }};
 }
 
+#[macro_export]
+macro_rules! extract_field {
+    ($request:ident, $name:expr) => {{
+        let opt = $request.extract($name);
+        match opt {
+            Some(value) => value,
+            None => {
+                let msg = format!("Field {} not provided.", $name);
+                let error = $crate::worker::Error::Reject(msg);
+                return Err(error);
+            }
+        }
+    }};
+}
 
 mod test {
     #[test]
@@ -76,5 +90,20 @@ mod test {
             }))
         }));
     }
+
+    /*
+    #[test]
+    fn test_extract_field() {
+        use rustc_serialize::json::{Json, Object};
+        let object = mould_json!{
+            "one" => 3.1f64
+        };
+        let request = Request
+        let clos = move || {
+            extract_field!(request, "one")
+        };
+        let value: f64 = clos().unwrap();
+    }
+    */
 }
 

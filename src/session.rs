@@ -53,6 +53,7 @@ pub struct Request {
     payload: Object,
 }
 
+/// Interface for access to payload of request.
 pub trait Extractor<T> {
     fn extract(&mut self, key: &str) -> Option<T>;
 }
@@ -74,6 +75,7 @@ macro_rules! extract_as {
 extract_as!(Request, Json::Object => Object);
 extract_as!(Request, Json::String => String);
 extract_as!(Request, Json::I64 => i64);
+extract_as!(Request, Json::F64 => f64);
 
 
 pub enum Input {
