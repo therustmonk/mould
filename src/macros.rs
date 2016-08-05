@@ -37,7 +37,7 @@ macro_rules! extract_field {
         match opt {
             Some(value) => value,
             None => {
-                let msg = format!("Field {} not provided.", $name);
+                let msg = format!("Field {} not provided or have wrong format.", $name);
                 let error = $crate::worker::Error::Reject(msg);
                 return Err(error);
             }
