@@ -8,15 +8,9 @@ use service::Service;
 use session::{self, Context, Output, Builder, Session};
 use worker::{Realize, Shortcut};
 
-// If add Sync and Send restrictions to Service trait,
-// than user have to implement it directly, but
-// this restrictions will derived automatically for
-// any type, because there aren't any mutable operation here
-type BoxedService<T> = Box<Service<T> + Send + Sync>;
-
 pub struct Suite<T: Session, B: Builder<T>> {
     builder: B,
-    services: HashMap<String, BoxedService<T>>,
+    services: HashMap<String, Box<Service<T>>>,
 }
 
 impl<T: Session, B: Builder<T>> Suite<T, B> {
@@ -28,7 +22,7 @@ impl<T: Session, B: Builder<T>> Suite<T, B> {
         }
     }
 
-    pub fn register<S: Service<T> + Send + Sync>(&mut self, name: &str, service: S) {
+    pub fn register<S: Service<T>>(&mut self, name: &str, service: S) {
         self.services.insert(name.to_owned(), Box::new(service));
     }
 }
