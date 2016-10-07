@@ -15,10 +15,22 @@ pub enum Realize {
     Done,
 }
 
+impl From<String> for Realize {
+    fn from(s: String) -> Self {
+        Realize::Reject(s)
+    }
+}
+
 pub enum Shortcut {
     Tuned,
     Reject(String),
     Done,
+}
+
+impl From<String> for Shortcut {
+    fn from(s: String) -> Self {
+        Shortcut::Reject(s)
+    }
 }
 
 pub type Result<T> = result::Result<T, Box<error::Error>>;

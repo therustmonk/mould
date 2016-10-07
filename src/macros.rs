@@ -40,6 +40,15 @@ macro_rules! extract_field {
     }};
 }
 
+#[macro_export]
+macro_rules! ensure_it {
+    ($check:expr, $reason:expr) => {{
+        if !$check {
+            return Ok(::std::convert::From::from($reason.to_string()));
+        }
+    }};
+}
+
 mod test {
     #[test]
     fn test_json_plain() {
