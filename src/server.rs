@@ -97,6 +97,7 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
                             },
                             Realize::OneItemAndDone(item) => {
                                 try!(session.send(Output::Item(item)));
+                                try!(session.send(Output::Done));
                                 break;
                             },
                             Realize::ManyItems(iter) => {
@@ -108,6 +109,7 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
                                 for item in iter {
                                     try!(session.send(Output::Item(item)));
                                 }
+                                try!(session.send(Output::Done));
                                 break;
                             },
                             Realize::Reject(reason) => {
