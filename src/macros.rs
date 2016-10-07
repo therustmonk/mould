@@ -34,14 +34,9 @@ macro_rules! mould_object {
 macro_rules! extract_field {
     ($request:ident, $name:expr) => {{
         let opt = $request.extract($name);
-        match opt {
-            Some(value) => value,
-            None => {
-                let msg = format!("Field {} not provided or have wrong format.", $name);
-                let error = $crate::worker::Error::Reject(msg);
-                return Err(error);
-            }
-        }
+        try!(opt.ok_or_else(|| {
+            format!("Field {} not provided or have wrong format.", $name)
+        }))
     }};
 }
 

@@ -6,7 +6,7 @@ use std::net::ToSocketAddrs;
 use websocket::Server;
 use service::Service;
 use session::{self, Context, Output, Builder, Session};
-use worker::{self, Realize, Shortcut};
+use worker::{Realize, Shortcut};
 
 // If add Sync and Send restrictions to Service trait,
 // than user have to implement it directly, but
@@ -66,7 +66,7 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
 
             debug!("Start session for {}", ip);
             loop { // Session loop
-                debug!("Begin new request workout for {}", ip);
+                debug!("Begin new request processing for {}", ip);
                 let result: Result<(), session::Error> = (|session: &mut Context<T>| loop { // Request loop
                     let (name, request) = try!(session.recv_request());
                     let service = match suite.services.get(&name) {
@@ -79,7 +79,11 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
                     match try!(worker.prepare(session, request)) {
                         Shortcut::Done => {
                             try!(session.send(Output::Done));
-                            continue
+                            continue;
+                        },
+                        Shortcut::Reject(reason) => {
+                            try!(session.send(Output::Reject(reason)));
+                            continue;
                         },
                         Shortcut::Tuned => (),
                     }
@@ -88,7 +92,6 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
                         try!(session.send(Output::Ready));
                         let option_request = try!(session.recv_next());
                         match try!(worker.realize(session, option_request)) {
-                            Realize::Done => break,
                             Realize::OneItem(item) => {
                                 try!(session.send(Output::Item(item)));
                             },
@@ -107,33 +110,31 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
                                 }
                                 break;
                             },
+                            Realize::Reject(reason) => {
+                                try!(session.send(Output::Reject(reason)));
+                                break;
+                            },
+                            Realize::Done => {
+                                try!(session.send(Output::Done));
+                                break;
+                            },
                         }
                     }
 
-                    try!(session.send(Output::Done));
 
                 })(&mut session);
                 // Inform user if
                 if let Err(reason) = result {
-                    let text = match reason {
+                    let output = match reason {
                         session::Error::Canceled => continue,
                         session::Error::ConnectionBroken => break,
                         session::Error::ConnectionClosed => break,
-                        session::Error::RejectedByWorker(worker::Error::Reject(reason)) => {
-                            debug!("Request rejected by worker {}", &reason);
-                            reason
-                        },
-                        session::Error::RejectedByWorker(worker::Error::Cause(cause)) => {
-                            warn!("Request rejected by cause {}", cause);
-                            "Internal error.".to_string()
-                        },
                         _ => {
-                            warn!("Request workout {} have catch an error {:?}", ip, reason);
-                            format!("Rejected with {:?}", reason)
+                            warn!("Request processing {} have catch an error {:?}", ip, reason);
+                            Output::Fail(format!("Internal error: {}", reason))
                         },
                     };
-                    // Not need this connection. Safe to unwrap.
-                    session.send(Output::Reject(text)).unwrap();
+                    session.send(output).unwrap();
                 }
             }
             debug!("Ends session for {}", ip);

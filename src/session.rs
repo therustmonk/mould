@@ -14,6 +14,8 @@
 //! * {"event": "reject", "data": {"message": "text_of_message"}}
 
 use std::str;
+use std::fmt;
+use std::error;
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
 use rustc_serialize::json::{Json, Object};
@@ -25,7 +27,6 @@ use websocket::receiver::Receiver;
 use websocket::dataframe::DataFrame;
 use websocket::stream::WebSocketStream;
 use websocket::ws::receiver::Receiver as WSReceiver;
-use worker;
 
 pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
 
@@ -88,6 +89,7 @@ pub enum Output {
     Item(Object),
     Done,
     Reject(String),
+    Fail(String),
 }
 
 #[derive(Debug)]
@@ -105,12 +107,50 @@ pub enum Error {
     Canceled,
     ConnectionBroken,
     ConnectionClosed,
-    RejectedByWorker(worker::Error),
+    WorkerFailed(Box<error::Error>),
 }
 
-impl From<worker::Error> for Error {
-    fn from(error: worker::Error) -> Self {
-        Error::RejectedByWorker(error)
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        use self::Error::*;
+        match *self {
+            IllegalJsonFormat => "illegal json format",
+            IllegalEventType => "illegal event type",
+            IllegalEventName(_) => "illegal event name",
+            IllegalMessage => "illegal message",
+            IllegalDataFormat => "illegal data format",
+            IllegalRequestFormat => "illegal request format",
+            BadMessageEncoding => "wrong message encoding",
+            ServiceNotFound => "service not found",
+            DataNotProvided => "data not provided",
+            UnexpectedState => "unexpected state",
+            Canceled => "cancelled",
+            ConnectionBroken => "connection broken",
+            ConnectionClosed => "connection closed",
+            WorkerFailed(ref cause) => cause.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        if let Error::WorkerFailed(ref cause) = *self {
+            Some(cause.as_ref())
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use std::error::Error;
+        write!(f, "Internal error: {}", self.description())
+    }
+}
+
+
+impl From<Box<error::Error>> for Error {
+    fn from(error: Box<error::Error>) -> Self {
+        Error::WorkerFailed(error)
     }
 }
 
@@ -252,6 +292,8 @@ impl<T: Session> Context<T> {
                 mould_json!({"event" => "done"}),
             Output::Reject(message) =>
                 mould_json!({"event" => "reject", "data" => message}),
+            Output::Fail(message) =>
+                mould_json!({"event" => "fail", "data" => message}),
         };
         let content = json.to_string();
         debug!("Send <= {}", content);
