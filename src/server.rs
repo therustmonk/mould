@@ -127,7 +127,7 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
                         session::Error::ConnectionClosed => break,
                         _ => {
                             warn!("Request processing {} have catch an error {:?}", ip, reason);
-                            Output::Fail(format!("Internal error: {}", reason))
+                            Output::Fail(reason.to_string())
                         },
                     };
                     session.send(output).unwrap();
