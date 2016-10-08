@@ -15,6 +15,12 @@ pub enum Realize {
     Done,
 }
 
+impl<'a> From<&'a str> for Realize {
+    fn from(s: &'a str) -> Self {
+        Realize::Reject(s.to_owned())
+    }
+}
+
 impl From<String> for Realize {
     fn from(s: String) -> Self {
         Realize::Reject(s)
@@ -25,6 +31,12 @@ pub enum Shortcut {
     Tuned,
     Reject(String),
     Done,
+}
+
+impl<'a> From<&'a str> for Shortcut {
+    fn from(s: &'a str) -> Self {
+        Shortcut::Reject(s.to_owned())
+    }
 }
 
 impl From<String> for Shortcut {
