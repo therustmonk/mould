@@ -142,8 +142,12 @@ impl error::Error for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use std::error::Error;
-        f.write_str(self.description())
+        if let Error::WorkerFailed(ref cause) = *self {
+            cause.fmt(f)
+        } else {
+            use std::error::Error;
+            f.write_str(self.description())
+        }
     }
 }
 
