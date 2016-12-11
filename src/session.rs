@@ -51,7 +51,7 @@ pub struct Context<T: Session> {
 
 pub struct Request {
     pub action: String,
-    payload: Object,
+    pub payload: Object,
 }
 
 /// Interface for access to payload of request.
