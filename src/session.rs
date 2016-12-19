@@ -78,10 +78,13 @@ extract_as!(Request, Json::String => String);
 extract_as!(Request, Json::I64 => i64);
 extract_as!(Request, Json::F64 => f64);
 
+pub type TaskId = usize;
 
 pub enum Input {
     Request(String, Request),
     Next(Option<Request>),
+    Suspend,
+    Resume(TaskId),
 }
 
 pub enum Output {
@@ -90,6 +93,12 @@ pub enum Output {
     Done,
     Reject(String),
     Fail(String),
+    Suspended(TaskId),
+}
+
+pub enum Alternative<T, U> {
+    Usual(T),
+    Unusual(U),
 }
 
 #[derive(Debug)]
@@ -108,6 +117,8 @@ pub enum Error {
     ConnectionBroken,
     ConnectionClosed,
     WorkerFailed(Box<error::Error>),
+    WorkerNotFound,
+    CannotSuspend,
 }
 
 impl error::Error for Error {
@@ -128,6 +139,8 @@ impl error::Error for Error {
             ConnectionBroken => "connection broken",
             ConnectionClosed => "connection closed",
             WorkerFailed(ref cause) => cause.description(),
+            WorkerNotFound => "task not found",
+            CannotSuspend => "cannot suspend worker",
         }
     }
 
@@ -215,10 +228,8 @@ impl<T: Session> Context<T> {
                                     };
                                     Ok(Input::Request(service, request))
                                 },
-                                Some(_) =>
-                                    Err(Error::IllegalDataFormat),
-                                None =>
-                                    Err(Error::DataNotProvided),
+                                Some(_) => Err(Error::IllegalDataFormat),
+                                None => Err(Error::DataNotProvided),
                             }
                         } else if event == "next" {
                             let request = match data.remove("data") {
@@ -237,16 +248,23 @@ impl<T: Session> Context<T> {
                                     };
                                     Some(request)
                                 },
-                                Some(Json::Null) =>
-                                    None,
-                                Some(_) =>
-                                    return Err(Error::IllegalDataFormat),
-                                None =>
-                                    None,
+                                Some(Json::Null) => None,
+                                Some(_) => {
+                                    return Err(Error::IllegalDataFormat);
+                                },
+                                None => None,
                             };
                             Ok(Input::Next(request))
+                        } else if event == "resume" {
+                            if let Some(Json::U64(task_id)) = data.remove("data") {
+                                Ok(Input::Resume(task_id as usize))
+                            } else {
+                                Err(Error::IllegalDataFormat)
+                            }
+                        } else if event == "suspend" {
+                            Ok(Input::Suspend)
                         } else if event == "cancel" {
-                           Err(Error::Canceled)
+                            Err(Error::Canceled)
                         } else {
                             Err(Error::IllegalEventName(event))
                         }
@@ -270,17 +288,19 @@ impl<T: Session> Context<T> {
         }
     }
 
-    pub fn recv_request(&mut self) -> Result<(String, Request), Error> {
+    pub fn recv_request_or_resume(&mut self) -> Result<Alternative<(String, Request), TaskId>, Error> {
         match self.recv() {
-            Ok(Input::Request(service, request)) => Ok((service, request)),
+            Ok(Input::Request(service, request)) => Ok(Alternative::Usual((service, request))),
+            Ok(Input::Resume(task_id)) => Ok(Alternative::Unusual(task_id)),
             Ok(_) => Err(Error::UnexpectedState),
             Err(ie) => Err(ie),
         }
     }
 
-    pub fn recv_next(&mut self) -> Result<Option<Request>, Error> {
+    pub fn recv_next_or_suspend(&mut self) -> Result<Alternative<Option<Request>, ()>, Error> {
         match self.recv() {
-            Ok(Input::Next(req)) => Ok(req),
+            Ok(Input::Next(req)) => Ok(Alternative::Usual(req)),
+            Ok(Input::Suspend) => Ok(Alternative::Unusual(())),
             Ok(_) => Err(Error::UnexpectedState),
             Err(ie) => Err(ie),
         }
@@ -298,6 +318,8 @@ impl<T: Session> Context<T> {
                 mould_json!({"event" => "reject", "data" => message}),
             Output::Fail(message) =>
                 mould_json!({"event" => "fail", "data" => message}),
+            Output::Suspended(task_id) =>
+                mould_json!({"event" => "suspended", "data" => task_id}),
         };
         let content = json.to_string();
         debug!("Send <= {}", content);

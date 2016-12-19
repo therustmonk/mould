@@ -2,6 +2,7 @@
 extern crate log;
 pub extern crate rustc_serialize;
 extern crate websocket;
+extern crate slab;
 
 #[macro_use]
 pub mod macros;

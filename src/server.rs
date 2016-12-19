@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 
 use websocket::Server;
+use slab::Slab;
 use service::Service;
-use session::{self, Context, Output, Builder, Session};
+use session::{self, Alternative, Context, Output, Builder, Session};
 use worker::{Realize, Shortcut};
 
 pub struct Suite<T: Session, B: Builder<T>> {
@@ -59,69 +60,99 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
             // TODO Determine handler by action name (refactoring handler needed)
 
             debug!("Start session for {}", ip);
+            let mut suspended_workers = Slab::with_capacity(10);
             loop { // Session loop
                 debug!("Begin new request processing for {}", ip);
-                let result: Result<(), session::Error> = (|session: &mut Context<T>| loop { // Request loop
-                    let (name, request) = try!(session.recv_request());
-                    let service = match suite.services.get(&name) {
-                        Some(value) => value,
-                        None => return Err(session::Error::ServiceNotFound),
-                    };
+                let result: Result<(), session::Error> = (|session: &mut Context<T>| {
+                    loop { // Request loop
+                        let mut worker = match try!(session.recv_request_or_resume()) {
+                            Alternative::Usual((service_name, request)) => {
+                                let service = match suite.services.get(&service_name) {
+                                    Some(value) => value,
+                                    None => return Err(session::Error::ServiceNotFound),
+                                };
 
-                    let mut worker = service.route(&request);
+                                let mut worker = service.route(&request);
 
-                    match try!(worker.prepare(session, request)) {
-                        Shortcut::Done => {
-                            try!(session.send(Output::Done));
-                            continue;
-                        },
-                        Shortcut::Reject(reason) => {
-                            try!(session.send(Output::Reject(reason)));
-                            continue;
-                        },
-                        Shortcut::Tuned => (),
-                    }
-
-                    loop {
-                        try!(session.send(Output::Ready));
-                        let option_request = try!(session.recv_next());
-                        match try!(worker.realize(session, option_request)) {
-                            Realize::OneItem(item) => {
-                                try!(session.send(Output::Item(item)));
+                                match try!(worker.prepare(session, request)) {
+                                    Shortcut::Done => {
+                                        try!(session.send(Output::Done));
+                                        continue;
+                                    },
+                                    Shortcut::Reject(reason) => {
+                                        try!(session.send(Output::Reject(reason)));
+                                        continue;
+                                    },
+                                    Shortcut::Tuned => (),
+                                }
+                                worker
                             },
-                            Realize::OneItemAndDone(item) => {
-                                try!(session.send(Output::Item(item)));
-                                try!(session.send(Output::Done));
-                                break;
-                            },
-                            Realize::ManyItems(iter) => {
-                                for item in iter {
-                                    try!(session.send(Output::Item(item)));
+                            Alternative::Unusual(task_id) => {
+                                match suspended_workers.remove(task_id) {
+                                    Some(worker) => {
+                                        worker
+                                    },
+                                    None => {
+                                        return Err(session::Error::WorkerNotFound);
+                                    },
                                 }
                             },
-                            Realize::ManyItemsAndDone(iter) => {
-                                for item in iter {
-                                    try!(session.send(Output::Item(item)));
-                                }
-                                try!(session.send(Output::Done));
-                                break;
-                            },
-                            Realize::Reject(reason) => {
-                                try!(session.send(Output::Reject(reason)));
-                                break;
-                            },
-                            Realize::Done => {
-                                try!(session.send(Output::Done));
-                                break;
-                            },
+                        };
+                        loop {
+                            try!(session.send(Output::Ready));
+                            match try!(session.recv_next_or_suspend()) {
+                                Alternative::Usual(option_request) => {
+                                    match try!(worker.realize(session, option_request)) {
+                                        Realize::OneItem(item) => {
+                                            try!(session.send(Output::Item(item)));
+                                        },
+                                        Realize::OneItemAndDone(item) => {
+                                            try!(session.send(Output::Item(item)));
+                                            try!(session.send(Output::Done));
+                                            break;
+                                        },
+                                        Realize::ManyItems(iter) => {
+                                            for item in iter {
+                                                try!(session.send(Output::Item(item)));
+                                            }
+                                        },
+                                        Realize::ManyItemsAndDone(iter) => {
+                                            for item in iter {
+                                                try!(session.send(Output::Item(item)));
+                                            }
+                                            try!(session.send(Output::Done));
+                                            break;
+                                        },
+                                        Realize::Reject(reason) => {
+                                            try!(session.send(Output::Reject(reason)));
+                                            break;
+                                        },
+                                        Realize::Done => {
+                                            try!(session.send(Output::Done));
+                                            break;
+                                        },
+                                    }
+                                },
+                                Alternative::Unusual(()) => {
+                                    match suspended_workers.insert(worker) {
+                                        Ok(task_id) => {
+                                            try!(session.send(Output::Suspended(task_id)));
+                                            break;
+                                        },
+                                        Err(_) => {
+                                            // TODO Conside to continue worker (don't fail)
+                                            return Err(session::Error::CannotSuspend);
+                                        },
+                                    }
+                                },
+                            }
                         }
                     }
-
-
                 })(&mut session);
                 // Inform user if
                 if let Err(reason) = result {
                     let output = match reason {
+                        // TODO Refactor cancel (rename to StopAll and add CancelWorker)
                         session::Error::Canceled => continue,
                         session::Error::ConnectionBroken => break,
                         session::Error::ConnectionClosed => break,
