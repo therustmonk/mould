@@ -19,16 +19,7 @@ use std::error;
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
 use rustc_serialize::json::{Json, Object};
-use websocket::Message;
-use websocket::Client as WSClient;
-use websocket::message::Type;
-use websocket::sender::Sender;
-use websocket::receiver::Receiver;
-use websocket::dataframe::DataFrame;
-use websocket::stream::WebSocketStream;
-use websocket::ws::receiver::Receiver as WSReceiver;
-
-pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
+use connector::{self, Flow};
 
 pub trait Builder<T: Session>: Send + Sync + 'static {
     fn build(&self) -> T;
@@ -44,8 +35,8 @@ impl<T: Session + Default> Builder<T> for DefaultBuilder {
 
 pub trait Session: 'static {}
 
-pub struct Context<T: Session> {
-    client: Client,
+pub struct Context<T: Session, R: Flow> {
+    client: R,
     session: T,
 }
 
@@ -109,13 +100,12 @@ pub enum Error {
     IllegalMessage,
     IllegalDataFormat,
     IllegalRequestFormat,
-    BadMessageEncoding,
     ServiceNotFound,
     DataNotProvided,
     UnexpectedState,
     Canceled,
-    ConnectionBroken,
     ConnectionClosed,
+    ConnectorFail(connector::Error),
     WorkerFailed(Box<error::Error>),
     WorkerNotFound,
     CannotSuspend,
@@ -131,13 +121,12 @@ impl error::Error for Error {
             IllegalMessage => "illegal message",
             IllegalDataFormat => "illegal data format",
             IllegalRequestFormat => "illegal request format",
-            BadMessageEncoding => "wrong message encoding",
             ServiceNotFound => "service not found",
             DataNotProvided => "data not provided",
             UnexpectedState => "unexpected state",
             Canceled => "cancelled",
-            ConnectionBroken => "connection broken",
             ConnectionClosed => "connection closed",
+            ConnectorFail(_) => "connector fail",
             WorkerFailed(ref cause) => cause.description(),
             WorkerNotFound => "task not found",
             CannotSuspend => "cannot suspend worker",
@@ -171,7 +160,13 @@ impl From<Box<error::Error>> for Error {
     }
 }
 
-impl<T: Session> Deref for Context<T> {
+impl From<connector::Error> for Error {
+    fn from(error: connector::Error) -> Self {
+        Error::ConnectorFail(error)
+    }
+}
+
+impl<T: Session, R: Flow> Deref for Context<T, R> {
     type Target = T;
 
     fn deref<'a>(&'a self) -> &'a T {
@@ -179,14 +174,14 @@ impl<T: Session> Deref for Context<T> {
     }
 }
 
-impl<T: Session> DerefMut for Context<T> {
+impl<T: Session, R: Flow> DerefMut for Context<T, R> {
     fn deref_mut<'a>(&'a mut self) -> &'a mut T {
         &mut self.session
     }
 }
 
-impl<T: Session> Context<T> {
-    pub fn new(client: Client, session: T) -> Self {
+impl<T: Session, R: Flow> Context<T, R> {
+    pub fn new(client: R, session: T) -> Self {
         Context {
             client: client,
             session: session,
@@ -194,16 +189,8 @@ impl<T: Session> Context<T> {
     }
 
     fn recv(&mut self) -> Result<Input, Error> {
-        let message: Message = match self.client.get_mut_receiver().recv_message() {
-            Ok(m) => m,
-            Err(_) => return Err(Error::ConnectionBroken),
-        };
-        match message.opcode {
-            Type::Text => {
-                let content = match str::from_utf8(&*message.payload) {
-                    Ok(data) => data,
-                    Err(_) => return Err(Error::BadMessageEncoding),
-                };
+        match self.client.pull()? {
+            Some(content) => {
                 debug!("Recv => {}", content);
                 if let Ok(Json::Object(mut data)) = Json::from_str(&content) {
                     if let Some(Json::String(event)) = data.remove("event") {
@@ -276,15 +263,7 @@ impl<T: Session> Context<T> {
                     Err(Error::IllegalJsonFormat)
                 }
             },
-            Type::Ping => {
-                match self.client.send_message(&Message::pong(message.payload)) {
-                    Ok(_) => self.recv(),
-                    Err(_) => Err(Error::ConnectionBroken),
-                }
-            },
-            Type::Binary => Err(Error::IllegalMessage),
-            Type::Pong => Err(Error::IllegalMessage), // we don't send pings!
-            Type::Close => Err(Error::ConnectionClosed),
+            None => Err(Error::ConnectionClosed),
         }
     }
 
@@ -323,10 +302,7 @@ impl<T: Session> Context<T> {
         };
         let content = json.to_string();
         debug!("Send <= {}", content);
-        match self.client.send_message(&Message::text(content)) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(Error::ConnectionBroken),
-        }
+        self.client.push(content).map_err(Error::from)
     }
 
 }
