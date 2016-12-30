@@ -19,7 +19,7 @@ use std::error;
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
 use rustc_serialize::json::{Json, Object};
-use connector::{self, Flow};
+use flow::{self, Flow};
 
 pub trait Builder<T: Session>: Send + Sync + 'static {
     fn build(&self) -> T;
@@ -105,7 +105,7 @@ pub enum Error {
     UnexpectedState,
     Canceled,
     ConnectionClosed,
-    ConnectorFail(connector::Error),
+    ConnectorFail(flow::Error),
     WorkerFailed(Box<error::Error>),
     WorkerNotFound,
     CannotSuspend,
@@ -126,7 +126,7 @@ impl error::Error for Error {
             UnexpectedState => "unexpected state",
             Canceled => "cancelled",
             ConnectionClosed => "connection closed",
-            ConnectorFail(_) => "connector fail",
+            ConnectorFail(_) => "flow fail",
             WorkerFailed(ref cause) => cause.description(),
             WorkerNotFound => "task not found",
             CannotSuspend => "cannot suspend worker",
@@ -160,8 +160,8 @@ impl From<Box<error::Error>> for Error {
     }
 }
 
-impl From<connector::Error> for Error {
-    fn from(error: connector::Error) -> Self {
+impl From<flow::Error> for Error {
+    fn from(error: flow::Error) -> Self {
         Error::ConnectorFail(error)
     }
 }

@@ -12,7 +12,7 @@ pub mod worker;
 pub mod session;
 pub mod server;
 pub mod prelude;
-pub mod connector;
+pub mod flow;
 
 pub use session::Session;
 pub use session::Builder;
