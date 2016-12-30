@@ -1,14 +1,10 @@
-use std::thread;
-use std::sync::Arc;
 use std::collections::HashMap;
-use std::net::ToSocketAddrs;
-
-use websocket::Server;
 use slab::Slab;
+
 use service::Service;
 use session::{self, Alternative, Context, Output, Builder, Session};
 use worker::{Realize, Shortcut};
-use connector::{Flow, IoFlow};
+use connector::Flow;
 
 // TODO Change services on the fly
 pub struct Suite<T: Session, B: Builder<T>> {
@@ -152,43 +148,60 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
 
 }
 
-pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
-    where A: ToSocketAddrs, B: Builder<T>, T: Session {
-    // CLIENTS HANDLING
-    // Fail if can't bind, safe to unwrap
-    let server = Server::bind(addr).unwrap();
-    let suite = Arc::new(suite);
+#[cfg(feature = "wsmould")]
+pub mod wsmould {
+    use std::thread;
+    use std::sync::Arc;
+    use std::net::ToSocketAddrs;
+    use websocket::Server;
+    use session::{Builder, Session};
+    use connector::Flow;
 
-    for connection in server {
-        let suite = suite.clone();
-        thread::spawn(move || {
-            // Separate thread, safe to unwrap connection initialization
-            let request = connection.unwrap().read_request().unwrap(); // Get the request
-            //let headers = request.headers.clone(); // Keep the headers so we can check them
-            request.validate().unwrap(); // Validate the request
-            let /*mut*/ response = request.accept(); // Form a response
-            /* TODO Protocols declaration
-            if let Some(&WebSocketProtocol(ref protocols)) = headers.get() {
-                if protocols.contains(&("rust-websocket".to_string())) {
-                    // We have a protocol we want to use
-                    response.headers.set(WebSocketProtocol(vec!["rust-websocket".to_string()]));
+    pub fn start<T, A, B>(addr: A, suite: super::Suite<T, B>)
+        where A: ToSocketAddrs, B: Builder<T>, T: Session {
+        // CLIENTS HANDLING
+        // Fail if can't bind, safe to unwrap
+        let server = Server::bind(addr).unwrap();
+        let suite = Arc::new(suite);
+
+        for connection in server {
+            let suite = suite.clone();
+            thread::spawn(move || {
+                // Separate thread, safe to unwrap connection initialization
+                let request = connection.unwrap().read_request().unwrap(); // Get the request
+                //let headers = request.headers.clone(); // Keep the headers so we can check them
+                request.validate().unwrap(); // Validate the request
+                let /*mut*/ response = request.accept(); // Form a response
+                /* TODO Protocols declaration
+                if let Some(&WebSocketProtocol(ref protocols)) = headers.get() {
+                    if protocols.contains(&("rust-websocket".to_string())) {
+                        // We have a protocol we want to use
+                        response.headers.set(WebSocketProtocol(vec!["rust-websocket".to_string()]));
+                    }
                 }
-            }
-            */
-            let client = response.send().unwrap(); // Send the response
+                */
+                let client = response.send().unwrap(); // Send the response
 
-            debug!("Connection from {}", client.who());
+                debug!("Connection from {}", client.who());
 
-            process_session(suite.as_ref(), client);
-        });
+                super::process_session(suite.as_ref(), client);
+            });
+        }
     }
 }
 
-pub fn start_io<T, B>(suite: Suite<T, B>)
-    where B: Builder<T>, T: Session {
-    let client = IoFlow::stdio();
-    // Use Arc to allow joining diferent start functions
-    let suite = Arc::new(suite);
-    debug!("Connection from {}", client.who());
-    process_session(suite.as_ref(), client);
+#[cfg(feature = "iomould")]
+pub mod iomould {
+    use std::sync::Arc;
+    use session::{Builder, Session};
+    use connector::{Flow, IoFlow};
+
+    pub fn start_io<T, B>(suite: super::Suite<T, B>)
+        where B: Builder<T>, T: Session {
+        let client = IoFlow::stdio();
+        // Use Arc to allow joining diferent start functions
+        let suite = Arc::new(suite);
+        debug!("Connection from {}", client.who());
+        super::process_session(suite.as_ref(), client);
+    }
 }

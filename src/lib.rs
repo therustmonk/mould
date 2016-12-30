@@ -1,8 +1,9 @@
 #[macro_use]
 extern crate log;
 pub extern crate rustc_serialize;
-extern crate websocket;
 extern crate slab;
+#[cfg(feature = "wsmould")]
+extern crate websocket;
 
 #[macro_use]
 pub mod macros;

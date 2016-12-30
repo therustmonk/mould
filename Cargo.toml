@@ -7,9 +7,14 @@ description = "Rust web-framework for websocket based web-apps."
 repository = "https://github.com/DenisKolodin/mould"
 license = "MIT/Apache-2.0"
 
+[features]
+default = ["iomould", "wsmould"]
+iomould = []
+wsmould = ["hyper", "websocket"]
+
 [dependencies]
 log = "~0.3.6"
 rustc-serialize = "~0.3.19"
-hyper = "~0.9.10"
-websocket = "~0.17.1"
 slab = "0.3.0"
+hyper = { version = "~0.9.10", optional = true }
+websocket = { version = "~0.17.1", optional = true }
