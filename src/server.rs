@@ -8,8 +8,9 @@ use slab::Slab;
 use service::Service;
 use session::{self, Alternative, Context, Output, Builder, Session};
 use worker::{Realize, Shortcut};
-use connector::Flow;
+use connector::{Flow, IoFlow};
 
+// TODO Change services on the fly
 pub struct Suite<T: Session, B: Builder<T>> {
     builder: B,
     services: HashMap<String, Box<Service<T>>>,
@@ -181,4 +182,13 @@ pub fn start<T, A, B>(addr: A, suite: Suite<T, B>)
             process_session(suite.as_ref(), client);
         });
     }
+}
+
+pub fn start_io<T, B>(suite: Suite<T, B>)
+    where B: Builder<T>, T: Session {
+    let client = IoFlow::stdio();
+    // Use Arc to allow joining diferent start functions
+    let suite = Arc::new(suite);
+    debug!("Connection from {}", client.who());
+    process_session(suite.as_ref(), client);
 }
