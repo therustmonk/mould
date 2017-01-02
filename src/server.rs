@@ -297,8 +297,12 @@ pub mod iomould {
 
         fn pull(&mut self) -> Result<Option<String>, flow::Error> {
             let mut buf = String::new();
-            self.reader.read_line(&mut buf)?;
-            Ok(Some(buf))
+            let read = self.reader.read_line(&mut buf)?;
+            if read > 0 {
+                Ok(Some(buf))
+            } else {
+                Ok(None)
+            }
         }
 
         fn push(&mut self, content: String) -> Result<(), flow::Error> {
