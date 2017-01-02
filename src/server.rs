@@ -253,7 +253,7 @@ pub mod wsmould {
 #[cfg(feature = "iomould")]
 pub mod iomould {
     use std::sync::Arc;
-    use std::io::{self, Read, Write, BufRead, BufReader, LineWriter};
+    use std::io::{self, Read, Write, BufRead, BufReader, BufWriter};
     use session::{Builder, Session};
     use flow::{self, Flow};
 
@@ -267,7 +267,7 @@ pub mod iomould {
     pub struct IoFlow<R: Read, W: Write> {
         who: String,
         reader: BufReader<R>,
-        writer: LineWriter<W>,
+        writer: BufWriter<W>,
     }
 
     // Can read from stdin, files, sockets, etc!
@@ -277,7 +277,7 @@ pub mod iomould {
             IoFlow {
                 who: who.to_owned(),
                 reader: BufReader::new(reader),
-                writer: LineWriter::new(writer),
+                writer: BufWriter::new(writer),
             }
         }
     }
@@ -305,7 +305,9 @@ pub mod iomould {
         }
 
         fn push(&mut self, content: String) -> Result<(), flow::Error> {
-            self.writer.write_all(content.as_bytes()).map_err(flow::Error::from)
+            self.writer.write_all(content.as_bytes())?;
+            self.writer.write_all(&['\n' as u8])?;
+            self.writer.flush().map_err(flow::Error::from)
         }
     }
 
