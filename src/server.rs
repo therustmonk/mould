@@ -218,12 +218,11 @@ pub mod wsmould {
 
 
 
-    pub fn start<T, A, B>(addr: A, suite: super::Suite<T, B>)
+    pub fn start<T, A, B>(addr: A, suite: Arc<super::Suite<T, B>>)
         where A: ToSocketAddrs, B: Builder<T>, T: Session {
         // CLIENTS HANDLING
         // Fail if can't bind, safe to unwrap
         let server = Server::bind(addr).unwrap();
-        let suite = Arc::new(suite);
 
         for connection in server {
             let suite = suite.clone();
@@ -310,11 +309,10 @@ pub mod iomould {
         }
     }
 
-    pub fn start<T, B>(suite: super::Suite<T, B>)
+    pub fn start<T, B>(suite: Arc<super::Suite<T, B>>)
         where B: Builder<T>, T: Session {
         let client = IoFlow::stdio();
         // Use Arc to allow joining diferent start functions
-        let suite = Arc::new(suite);
         debug!("Connection from {}", client.who());
         super::process_session(suite.as_ref(), client);
     }
