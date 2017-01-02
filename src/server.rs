@@ -310,7 +310,7 @@ pub mod iomould {
         }
     }
 
-    pub fn start_io<T, B>(suite: super::Suite<T, B>)
+    pub fn start<T, B>(suite: super::Suite<T, B>)
         where B: Builder<T>, T: Session {
         let client = IoFlow::stdio();
         // Use Arc to allow joining diferent start functions
