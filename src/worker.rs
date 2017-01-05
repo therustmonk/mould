@@ -12,6 +12,7 @@ pub enum Realize {
     OneItem(Object),
     OneItemAndDone(Object),
     Reject(String),
+    Empty,
     Done,
 }
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use slab::Slab;
 
+use std::thread;
 use service::Service;
 use session::{self, Alternative, Context, Output, Builder, Session};
 use worker::{Realize, Shortcut};
@@ -103,6 +104,9 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                                 Realize::Reject(reason) => {
                                     try!(session.send(Output::Reject(reason)));
                                     break;
+                                },
+                                Realize::Empty => {
+                                    thread::yield_now();
                                 },
                                 Realize::Done => {
                                     try!(session.send(Output::Done));
