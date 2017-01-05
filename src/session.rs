@@ -50,24 +50,29 @@ pub trait Extractor<T> {
     fn extract(&mut self, key: &str) -> Option<T>;
 }
 
-macro_rules! extract_as {
-    ($fort:ty, $from:path => $to:ty) => {
-        impl Extractor<$to> for $fort {
-            fn extract(&mut self, key: &str) -> Option<$to> {
-                if let Some($from(data)) = self.payload.remove(key) {
-                    Some(data)
-                } else {
-                    None
-                }
-            }
-        }
+impl Extractor<Object> for Request {
+    fn extract(&mut self, key: &str) -> Option<Object> {
+        self.payload.remove(key).and_then(Json::into_object)
     }
 }
 
-extract_as!(Request, Json::Object => Object);
-extract_as!(Request, Json::String => String);
-extract_as!(Request, Json::I64 => i64);
-extract_as!(Request, Json::F64 => f64);
+impl Extractor<String> for Request {
+    fn extract(&mut self, key: &str) -> Option<String> {
+        self.payload.remove(key).as_ref().and_then(Json::as_string).map(str::to_owned)
+    }
+}
+
+impl Extractor<i64> for Request {
+    fn extract(&mut self, key: &str) -> Option<i64> {
+        self.payload.remove(key).as_ref().and_then(Json::as_i64)
+    }
+}
+
+impl Extractor<f64> for Request {
+    fn extract(&mut self, key: &str) -> Option<f64> {
+        self.payload.remove(key).as_ref().and_then(Json::as_f64)
+    }
+}
 
 pub type TaskId = usize;
 
