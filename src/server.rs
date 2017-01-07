@@ -191,27 +191,26 @@ pub mod wsmould {
         }
 
         fn pull(&mut self) -> Result<Option<String>, flow::Error> {
-            let message: Message = self.get_mut_receiver().recv_message()?;
-            match message.opcode {
-                Type::Text => {
-                    let content = str::from_utf8(&*message.payload)?;
-                    Ok(Some(content.to_owned()))
-                },
-                Type::Close => {
-                    Ok(None)
-                },
-                Type::Ping => {
-                    match self.send_message(&Message::pong(message.payload)) {
-                        Ok(_) => self.pull(),
-                        Err(_) => {
-                            Err(flow::Error::ConnectionBroken)
-                        },
-                    }
-                },
-                Type::Binary | Type::Pong => {
-                    // continue
-                    self.pull()
-                },
+            loop {
+                let message: Message = self.get_mut_receiver().recv_message()?;
+                match message.opcode {
+                    Type::Text => {
+                        let content = str::from_utf8(&*message.payload)?;
+                        return Ok(Some(content.to_owned()));
+                    },
+                    Type::Close => {
+                        return Ok(None);
+                    },
+                    Type::Ping => {
+                        match self.send_message(&Message::pong(message.payload)) {
+                            Err(_) => {
+                                return Err(flow::Error::ConnectionBroken);
+                            },
+                            Ok(_) => (),
+                        }
+                    },
+                    Type::Binary | Type::Pong => (),
+                }
             }
         }
 
