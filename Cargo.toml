@@ -16,5 +16,5 @@ wsmould = ["hyper", "websocket"]
 log = "~0.3.6"
 rustc-serialize = "~0.3.19"
 slab = "0.3.0"
-hyper = { version = "~0.9.10", optional = true }
+hyper = { version = "~0.9.14", optional = true }
 websocket = { version = "~0.17.1", optional = true }
