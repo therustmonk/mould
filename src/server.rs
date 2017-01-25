@@ -155,9 +155,11 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
 #[cfg(feature = "wsmould")]
 pub mod wsmould {
     use std::thread;
+    use std::io::ErrorKind;
     use std::sync::Arc;
     use std::net::ToSocketAddrs;
     use std::str::{self, Utf8Error};
+    use std::time::{SystemTime, Duration};
     use websocket::Server;
     use websocket::message::{Message, Type};
     use websocket::client::Client as WSClient;
@@ -165,7 +167,7 @@ pub mod wsmould {
     use websocket::sender::Sender;
     use websocket::receiver::Receiver;
     use websocket::stream::WebSocketStream;
-    use websocket::result::WebSocketError;
+    use websocket::result::{WebSocketResult, WebSocketError};
     use websocket::ws::receiver::Receiver as WSReceiver;
     use session::{Builder, Session};
     use flow::{self, Flow};
@@ -191,25 +193,44 @@ pub mod wsmould {
         }
 
         fn pull(&mut self) -> Result<Option<String>, flow::Error> {
+            let mut last_ping = SystemTime::now();
+            let ping_interval = Duration::from_secs(20);
             loop {
-                let message: Message = self.get_mut_receiver().recv_message()?;
-                match message.opcode {
-                    Type::Text => {
-                        let content = str::from_utf8(&*message.payload)?;
-                        return Ok(Some(content.to_owned()));
-                    },
-                    Type::Close => {
-                        return Ok(None);
-                    },
-                    Type::Ping => {
-                        match self.send_message(&Message::pong(message.payload)) {
-                            Err(_) => {
-                                return Err(flow::Error::ConnectionBroken);
+                let message: WebSocketResult<Message> = self.get_mut_receiver().recv_message();
+                match message {
+                    Ok(message) => {
+                        match message.opcode {
+                            Type::Text => {
+                                let content = str::from_utf8(&*message.payload)?;
+                                return Ok(Some(content.to_owned()));
                             },
-                            Ok(_) => (),
+                            Type::Close => {
+                                return Ok(None);
+                            },
+                            Type::Ping => {
+                                self.send_message(&Message::pong(message.payload))?;
+                            },
+                            Type::Pong => {
+                                trace!("pong received: {:?}", message.payload);
+                            },
+                            Type::Binary => (),
                         }
+                        // No need ping if interaction was successful
+                        last_ping = SystemTime::now();
                     },
-                    Type::Binary | Type::Pong => (),
+                    Err(WebSocketError::IoError(ref err)) if err.kind() == ErrorKind::WouldBlock => {
+                        let elapsed = last_ping.elapsed().map(|dur| dur > ping_interval).unwrap_or(false);
+                        if elapsed {
+                            // Reset time to stop ping flood
+                            last_ping = SystemTime::now();
+                            trace!("sending ping");
+                            self.send_message(&Message::ping("mould-ping".as_bytes()))?;
+                        }
+                        thread::sleep(Duration::from_millis(50));
+                    },
+                    Err(err) => {
+                        return Err(flow::Error::from(err));
+                    },
                 }
             }
         }
@@ -244,6 +265,7 @@ pub mod wsmould {
                 }
                 */
                 let client = response.send().unwrap(); // Send the response
+                client.get_receiver().set_nonblocking(true).expect("can't use non-blocking webosckets");
 
                 debug!("Connection from {}", client.who());
 
