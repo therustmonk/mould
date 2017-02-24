@@ -45,32 +45,66 @@ pub struct Request {
     pub payload: Object,
 }
 
+#[derive(Debug)]
+pub struct ExtractError<'a> {
+    key: &'a str,
+}
+
+impl<'a> error::Error for ExtractError<'a> {
+    fn description(&self) -> &str {
+        "field not found"
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        None
+    }
+}
+
+impl<'a> fmt::Display for ExtractError<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Field {} not provided or have wrong format.", self.key)
+    }
+}
+
+impl<'a> From<&'a str> for ExtractError<'a> {
+    fn from(key: &'a str) -> Self {
+        ExtractError {
+            key: key,
+        }
+    }
+}
+
 /// Interface for access to payload of request.
 pub trait Extractor<T> {
-    fn extract(&mut self, key: &str) -> Option<T>;
+    // TODO Change to Result<T, String> to remove extract_field! macro
+    fn extract<'a>(&mut self, key: &'a str) -> Result<T, ExtractError<'a>>;
 }
 
 impl Extractor<Object> for Request {
-    fn extract(&mut self, key: &str) -> Option<Object> {
+    fn extract<'a>(&mut self, key: &'a str) -> Result<Object, ExtractError<'a>> {
         self.payload.remove(key).and_then(Json::into_object)
+            .ok_or(ExtractError::from(key))
     }
 }
 
 impl Extractor<String> for Request {
-    fn extract(&mut self, key: &str) -> Option<String> {
+    fn extract<'a>(&mut self, key: &'a str) -> Result<String, ExtractError<'a>> {
         self.payload.remove(key).as_ref().and_then(Json::as_string).map(str::to_owned)
+            .ok_or(ExtractError::from(key))
     }
 }
 
 impl Extractor<i64> for Request {
-    fn extract(&mut self, key: &str) -> Option<i64> {
+    fn extract<'a>(&mut self, key: &'a str) -> Result<i64, ExtractError<'a>> {
         self.payload.remove(key).as_ref().and_then(Json::as_i64)
+            .ok_or(ExtractError::from(key))
     }
 }
 
 impl Extractor<f64> for Request {
-    fn extract(&mut self, key: &str) -> Option<f64> {
+    fn extract<'a>(&mut self, key: &'a str) -> Result<f64, ExtractError<'a>> {
         self.payload.remove(key).as_ref().and_then(Json::as_f64)
+            .ok_or(ExtractError::from(key))
     }
 }
 

@@ -33,10 +33,7 @@ macro_rules! mould_object {
 #[macro_export]
 macro_rules! extract_field {
     ($request:ident, $name:expr) => {{
-        let opt = $request.extract($name);
-        try!(opt.ok_or_else(|| {
-            format!("Field {} not provided or have wrong format.", $name)
-        }))
+        $request.extract($name)?
     }};
 }
 
