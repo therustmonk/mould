@@ -108,6 +108,13 @@ impl Extractor<f64> for Request {
     }
 }
 
+impl Extractor<bool> for Request {
+    fn extract<'a>(&mut self, key: &'a str) -> Result<bool, ExtractError<'a>> {
+        self.payload.remove(key).as_ref().and_then(Json::as_boolean)
+            .ok_or(ExtractError::from(key))
+    }
+}
+
 pub type TaskId = usize;
 
 pub enum Input {
