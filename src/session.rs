@@ -18,7 +18,7 @@ use std::fmt;
 use std::error;
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
-use rustc_serialize::json::{Json, Object};
+use rustc_serialize::json::{Json, Object, Array};
 use flow::{self, Flow};
 
 pub trait Builder<T: Session>: Send + Sync + 'static {
@@ -83,6 +83,13 @@ pub trait Extractor<T> {
 impl Extractor<Object> for Request {
     fn extract<'a>(&mut self, key: &'a str) -> Result<Object, ExtractError<'a>> {
         self.payload.remove(key).and_then(Json::into_object)
+            .ok_or(ExtractError::from(key))
+    }
+}
+
+impl Extractor<Array> for Request {
+    fn extract<'a>(&mut self, key: &'a str) -> Result<Array, ExtractError<'a>> {
+        self.payload.remove(key).and_then(Json::into_array)
             .ok_or(ExtractError::from(key))
     }
 }
