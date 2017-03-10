@@ -13,8 +13,8 @@ iomould = []
 wsmould = ["hyper", "websocket"]
 
 [dependencies]
-log = "~0.3.6"
-rustc-serialize = "~0.3.19"
+log = "0.3.7"
+rustc-serialize = "0.3.19"
 slab = "0.3.0"
-hyper = { version = "~0.9.14", optional = true }
+hyper = { version = "0.10.5", optional = true }
 websocket = { git = "https://github.com/cyderize/rust-websocket", optional = true }
