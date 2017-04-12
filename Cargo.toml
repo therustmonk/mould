@@ -17,4 +17,5 @@ log = "0.3.7"
 rustc-serialize = "0.3.19"
 slab = "0.3.0"
 hyper = { version = "0.10.5", optional = true }
-websocket = { git = "https://github.com/asayers/rust-websocket", branch = "openssl-0.9", optional = true }
+websocket = { version = "0.19.1", optional = true }
+#websocket = { git = "https://github.com/asayers/rust-websocket", branch = "openssl-0.9", optional = true }

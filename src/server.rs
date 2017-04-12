@@ -163,12 +163,8 @@ pub mod wsmould {
     use websocket::Server;
     use websocket::message::{Message, Type};
     use websocket::client::Client as WSClient;
-    use websocket::dataframe::DataFrame;
-    use websocket::sender::Sender;
-    use websocket::receiver::Receiver;
-    use websocket::stream::WebSocketStream;
+    use websocket::stream::TcpStream;
     use websocket::result::{WebSocketResult, WebSocketError};
-    use websocket::ws::receiver::Receiver as WSReceiver;
     use session::{Builder, Session};
     use flow::{self, Flow};
 
@@ -184,11 +180,11 @@ pub mod wsmould {
         }
     }
 
-    pub type Client = WSClient<DataFrame, Sender<WebSocketStream>, Receiver<WebSocketStream>>;
+    pub type Client = WSClient<TcpStream>;
 
     impl Flow for Client {
         fn who(&self) -> String {
-            let ip = self.get_sender().get_ref().peer_addr().unwrap();
+            let ip = self.peer_addr().unwrap();
             format!("WS IP {}", ip)
         }
 
@@ -196,7 +192,7 @@ pub mod wsmould {
             let mut last_ping = SystemTime::now();
             let ping_interval = Duration::from_secs(20);
             loop {
-                let message: WebSocketResult<Message> = self.get_mut_receiver().recv_message();
+                let message: WebSocketResult<Message> = self.recv_message();
                 match message {
                     Ok(message) => {
                         match message.opcode {
@@ -248,27 +244,12 @@ pub mod wsmould {
         // Fail if can't bind, safe to unwrap
         let server = Server::bind(addr).unwrap();
 
-        for connection in server {
+        for connection in server.filter_map(Result::ok) {
             let suite = suite.clone();
             thread::spawn(move || {
-                // Separate thread, safe to unwrap connection initialization
-                let request = connection.unwrap().read_request().unwrap(); // Get the request
-                //let headers = request.headers.clone(); // Keep the headers so we can check them
-                request.validate().unwrap(); // Validate the request
-                let /*mut*/ response = request.accept(); // Form a response
-                /* TODO Protocols declaration
-                if let Some(&WebSocketProtocol(ref protocols)) = headers.get() {
-                    if protocols.contains(&("rust-websocket".to_string())) {
-                        // We have a protocol we want to use
-                        response.headers.set(WebSocketProtocol(vec!["rust-websocket".to_string()]));
-                    }
-                }
-                */
-                let client = response.send().unwrap(); // Send the response
-                client.get_receiver().set_nonblocking(true).expect("can't use non-blocking webosckets");
-
+                let client = connection.accept().unwrap();
+                client.set_nonblocking(true).expect("can't use non-blocking webosckets");
                 debug!("Connection from {}", client.who());
-
                 super::process_session(suite.as_ref(), client);
             });
         }
