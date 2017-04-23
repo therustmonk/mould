@@ -1,6 +1,5 @@
-#[macro_use]
-extern crate log;
-pub extern crate rustc_serialize;
+#[macro_use] extern crate log;
+#[macro_use] extern crate serde_json;
 extern crate slab;
 #[cfg(feature = "wsmould")]
 extern crate websocket;

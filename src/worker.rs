@@ -1,8 +1,7 @@
 use std::error;
 use std::result;
-use rustc_serialize::json::Object;
 use std::iter::Iterator;
-use session::{Request};
+use session::{Request, Object};
 
 pub type BoxedObjects = Box<Iterator<Item=Object>>;
 

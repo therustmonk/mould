@@ -13,13 +13,16 @@
 //! * {"event": "done"}
 //! * {"event": "reject", "data": {"message": "text_of_message"}}
 
-use std::str;
+use std::str::{self, FromStr};
 use std::fmt;
 use std::error;
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
-use rustc_serialize::json::{Json, Object, Array};
+use serde_json::{Value, Map};
 use flow::{self, Flow};
+
+pub type Object = Map<String, Value>;
+pub type Array = Vec<Value>;
 
 pub trait Builder<T: Session>: Send + Sync + 'static {
     fn build(&self) -> T;
@@ -82,42 +85,42 @@ pub trait Extractor<T> {
 
 impl Extractor<Object> for Request {
     fn extract<'a>(&mut self, key: &'a str) -> Result<Object, ExtractError<'a>> {
-        self.payload.remove(key).and_then(Json::into_object)
+        self.payload.get(key).and_then(Value::as_object).map(Map::to_owned)
             .ok_or(ExtractError::from(key))
     }
 }
 
 impl Extractor<Array> for Request {
     fn extract<'a>(&mut self, key: &'a str) -> Result<Array, ExtractError<'a>> {
-        self.payload.remove(key).and_then(Json::into_array)
+        self.payload.get(key).and_then(Value::as_array).map(Array::to_owned)
             .ok_or(ExtractError::from(key))
     }
 }
 
 impl Extractor<String> for Request {
     fn extract<'a>(&mut self, key: &'a str) -> Result<String, ExtractError<'a>> {
-        self.payload.remove(key).as_ref().and_then(Json::as_string).map(str::to_owned)
+        self.payload.get(key).and_then(Value::as_str).map(str::to_owned)
             .ok_or(ExtractError::from(key))
     }
 }
 
 impl Extractor<i64> for Request {
     fn extract<'a>(&mut self, key: &'a str) -> Result<i64, ExtractError<'a>> {
-        self.payload.remove(key).as_ref().and_then(Json::as_i64)
+        self.payload.get(key).and_then(Value::as_i64)
             .ok_or(ExtractError::from(key))
     }
 }
 
 impl Extractor<f64> for Request {
     fn extract<'a>(&mut self, key: &'a str) -> Result<f64, ExtractError<'a>> {
-        self.payload.remove(key).as_ref().and_then(Json::as_f64)
+        self.payload.get(key).and_then(Value::as_f64)
             .ok_or(ExtractError::from(key))
     }
 }
 
 impl Extractor<bool> for Request {
     fn extract<'a>(&mut self, key: &'a str) -> Result<bool, ExtractError<'a>> {
-        self.payload.remove(key).as_ref().and_then(Json::as_boolean)
+        self.payload.get(key).and_then(Value::as_bool)
             .ok_or(ExtractError::from(key))
     }
 }
@@ -152,6 +155,7 @@ pub enum Error {
     IllegalEventName(String),
     IllegalMessage,
     IllegalDataFormat,
+    IllegalTaskId,
     IllegalRequestFormat,
     ServiceNotFound,
     DataNotProvided,
@@ -173,6 +177,7 @@ impl error::Error for Error {
             IllegalEventName(_) => "illegal event name",
             IllegalMessage => "illegal message",
             IllegalDataFormat => "illegal data format",
+            IllegalTaskId => "illegal task id",
             IllegalRequestFormat => "illegal request format",
             ServiceNotFound => "service not found",
             DataNotProvided => "data not provided",
@@ -245,21 +250,21 @@ impl<T: Session, R: Flow> Context<T, R> {
         match self.client.pull()? {
             Some(content) => {
                 debug!("Recv => {}", content);
-                if let Ok(Json::Object(mut data)) = Json::from_str(&content) {
-                    if let Some(Json::String(event)) = data.remove("event") {
+                if let Ok(Value::Object(mut data)) = Value::from_str(&content) {
+                    if let Some(Value::String(event)) = data.remove("event") {
                         if event == "request" {
                             match data.remove("data") {
-                                Some(Json::Object(mut data)) => {
+                                Some(Value::Object(mut data)) => {
                                     let service = match data.remove("service") {
-                                        Some(Json::String(data)) => data,
+                                        Some(Value::String(data)) => data,
                                         _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let action = match data.remove("action") {
-                                        Some(Json::String(data)) => data,
+                                        Some(Value::String(data)) => data,
                                         _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let payload = match data.remove("payload") {
-                                        Some(Json::Object(data)) => data,
+                                        Some(Value::Object(data)) => data,
                                         _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let request = Request {
@@ -273,13 +278,13 @@ impl<T: Session, R: Flow> Context<T, R> {
                             }
                         } else if event == "next" {
                             let request = match data.remove("data") {
-                                Some(Json::Object(mut data)) => {
+                                Some(Value::Object(mut data)) => {
                                     let action = match data.remove("action") {
-                                        Some(Json::String(data)) => data,
+                                        Some(Value::String(data)) => data,
                                         _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let payload = match data.remove("payload") {
-                                        Some(Json::Object(data)) => data,
+                                        Some(Value::Object(data)) => data,
                                         _ => return Err(Error::IllegalRequestFormat),
                                     };
                                     let request = Request {
@@ -288,7 +293,7 @@ impl<T: Session, R: Flow> Context<T, R> {
                                     };
                                     Some(request)
                                 },
-                                Some(Json::Null) => None,
+                                Some(Value::Null) => None,
                                 Some(_) => {
                                     return Err(Error::IllegalDataFormat);
                                 },
@@ -296,8 +301,12 @@ impl<T: Session, R: Flow> Context<T, R> {
                             };
                             Ok(Input::Next(request))
                         } else if event == "resume" {
-                            if let Some(Json::U64(task_id)) = data.remove("data") {
-                                Ok(Input::Resume(task_id as usize))
+                            if let Some(Value::Number(task_id)) = data.remove("data") {
+                                if let Some(task_id) = task_id.as_u64() {
+                                    Ok(Input::Resume(task_id as usize))
+                                } else {
+                                    Err(Error::IllegalTaskId)
+                                }
                             } else {
                                 Err(Error::IllegalDataFormat)
                             }
@@ -341,17 +350,17 @@ impl<T: Session, R: Flow> Context<T, R> {
     pub fn send(&mut self, out: Output) -> Result<(), Error> {
         let json = match out {
             Output::Item(data) =>
-                mould_json!({"event" => "item", "data" => data}),
+                json!({"event": "item", "data": data}),
             Output::Ready =>
-                mould_json!({"event" => "ready"}),
+                json!({"event": "ready"}),
             Output::Done =>
-                mould_json!({"event" => "done"}),
+                json!({"event": "done"}),
             Output::Reject(message) =>
-                mould_json!({"event" => "reject", "data" => message}),
+                json!({"event": "reject", "data": message}),
             Output::Fail(message) =>
-                mould_json!({"event" => "fail", "data" => message}),
+                json!({"event": "fail", "data": message}),
             Output::Suspended(task_id) =>
-                mould_json!({"event" => "suspended", "data" => task_id}),
+                json!({"event": "suspended", "data": task_id}),
         };
         let content = json.to_string();
         debug!("Send <= {}", content);
