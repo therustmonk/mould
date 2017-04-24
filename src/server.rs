@@ -43,7 +43,7 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
         debug!("Begin new request processing for {}", who);
         let result: Result<(), session::Error> = (|session: &mut Context<T, R>| {
             loop { // Request loop
-                let mut worker = match try!(session.recv_request_or_resume()) {
+                let mut worker = match session.recv_request_or_resume()? {
                     Alternative::Usual((service_name, request)) => {
                         let service = match suite.services.get(&service_name) {
                             Some(value) => value,
@@ -52,13 +52,13 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
 
                         let mut worker = service.route(&request);
 
-                        match try!(worker.prepare(session, request)) {
+                        match worker.prepare(session, request)? {
                             Shortcut::Done => {
-                                try!(session.send(Output::Done));
+                                session.send(Output::Done)?;
                                 continue;
                             },
                             Shortcut::Reject(reason) => {
-                                try!(session.send(Output::Reject(reason)));
+                                session.send(Output::Reject(reason))?;
                                 continue;
                             },
                             Shortcut::Tuned => (),
@@ -77,39 +77,39 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                     },
                 };
                 loop {
-                    try!(session.send(Output::Ready));
-                    match try!(session.recv_next_or_suspend()) {
+                    session.send(Output::Ready)?;
+                    match session.recv_next_or_suspend()? {
                         Alternative::Usual(option_request) => {
-                            match try!(worker.realize(session, option_request)) {
+                            match worker.realize(session, option_request)? {
                                 Realize::OneItem(item) => {
-                                    try!(session.send(Output::Item(item)));
+                                    session.send(Output::Item(item))?;
                                 },
                                 Realize::OneItemAndDone(item) => {
-                                    try!(session.send(Output::Item(item)));
-                                    try!(session.send(Output::Done));
+                                    session.send(Output::Item(item))?;
+                                    session.send(Output::Done)?;
                                     break;
                                 },
                                 Realize::ManyItems(iter) => {
                                     for item in iter {
-                                        try!(session.send(Output::Item(item)));
+                                        session.send(Output::Item(item))?;
                                     }
                                 },
                                 Realize::ManyItemsAndDone(iter) => {
                                     for item in iter {
-                                        try!(session.send(Output::Item(item)));
+                                        session.send(Output::Item(item))?;
                                     }
-                                    try!(session.send(Output::Done));
+                                    session.send(Output::Done)?;
                                     break;
                                 },
                                 Realize::Reject(reason) => {
-                                    try!(session.send(Output::Reject(reason)));
+                                    session.send(Output::Reject(reason))?;
                                     break;
                                 },
                                 Realize::Empty => {
                                     thread::yield_now();
                                 },
                                 Realize::Done => {
-                                    try!(session.send(Output::Done));
+                                    session.send(Output::Done)?;
                                     break;
                                 },
                             }
@@ -117,7 +117,7 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                         Alternative::Unusual(()) => {
                             match suspended_workers.insert(worker) {
                                 Ok(task_id) => {
-                                    try!(session.send(Output::Suspended(task_id)));
+                                    session.send(Output::Suspended(task_id))?;
                                     break;
                                 },
                                 Err(_) => {
