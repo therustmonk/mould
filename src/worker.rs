@@ -1,6 +1,10 @@
 use session::{Request, Object};
+use extractor;
 
 error_chain! {
+    links {
+        Extractor(extractor::Error, extractor::ErrorKind);
+    }
 }
 
 pub enum Realize {
