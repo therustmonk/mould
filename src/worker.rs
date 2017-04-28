@@ -1,13 +1,8 @@
 use std::error;
 use std::result;
-use std::iter::Iterator;
 use session::{Request, Object};
 
-pub type BoxedObjects = Box<Iterator<Item=Object>>;
-
 pub enum Realize {
-    ManyItems(BoxedObjects),
-    ManyItemsAndDone(BoxedObjects),
     OneItem(Object),
     OneItemAndDone(Object),
     Reject(String),

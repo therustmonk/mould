@@ -89,18 +89,6 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                                     session.send(Output::Done)?;
                                     break;
                                 },
-                                Realize::ManyItems(iter) => {
-                                    for item in iter {
-                                        session.send(Output::Item(item))?;
-                                    }
-                                },
-                                Realize::ManyItemsAndDone(iter) => {
-                                    for item in iter {
-                                        session.send(Output::Item(item))?;
-                                    }
-                                    session.send(Output::Done)?;
-                                    break;
-                                },
                                 Realize::Reject(reason) => {
                                     session.send(Output::Reject(reason))?;
                                     break;
