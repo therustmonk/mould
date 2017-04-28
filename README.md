@@ -1,3 +1,9 @@
+# Mould websocket-driven framework
+
+This framework helps to create interactive web-applications with websockets communications.
+
+[Documentation](https://docs.rs/mould/)
+
 ## License
 
 Licensed under either of
