@@ -1,6 +1,7 @@
-use std::error;
-use std::result;
 use session::{Request, Object};
+
+error_chain! {
+}
 
 pub enum Realize {
     OneItem(Object),
@@ -39,8 +40,6 @@ impl From<String> for Shortcut {
         Shortcut::Reject(s)
     }
 }
-
-pub type Result<T> = result::Result<T, Box<error::Error>>;
 
 pub trait Worker<T> {
     fn prepare(&mut self, _: &mut T, _: Request) -> Result<Shortcut> {

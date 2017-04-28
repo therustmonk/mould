@@ -13,12 +13,10 @@
 //! * {"event": "done"}
 //! * {"event": "reject", "data": {"message": "text_of_message"}}
 
-use std::str::{self, FromStr};
-use std::fmt;
-use std::error;
+use std::str;
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
-use serde_json::{Value, Map};
+use serde_json::{self, Value, Map, from_str, from_value};
 use flow::{self, Flow};
 
 pub type Object = Map<String, Value>;
@@ -71,79 +69,18 @@ pub enum Alternative<T, U> {
     Unusual(U),
 }
 
-#[derive(Debug)]
-pub enum Error {
-    IllegalJsonFormat,
-    IllegalEventType,
-    IllegalEventName(String),
-    IllegalMessage,
-    IllegalDataFormat,
-    IllegalTaskId,
-    IllegalRequestFormat,
-    ServiceNotFound,
-    DataNotProvided,
-    UnexpectedState,
-    Canceled,
-    ConnectionClosed,
-    ConnectorFail(flow::Error),
-    WorkerFailed(Box<error::Error>),
-    WorkerNotFound,
-    CannotSuspend,
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        use self::Error::*;
-        match *self {
-            IllegalJsonFormat => "illegal json format",
-            IllegalEventType => "illegal event type",
-            IllegalEventName(_) => "illegal event name",
-            IllegalMessage => "illegal message",
-            IllegalDataFormat => "illegal data format",
-            IllegalTaskId => "illegal task id",
-            IllegalRequestFormat => "illegal request format",
-            ServiceNotFound => "service not found",
-            DataNotProvided => "data not provided",
-            UnexpectedState => "unexpected state",
-            Canceled => "cancelled",
-            ConnectionClosed => "connection closed",
-            ConnectorFail(_) => "flow fail",
-            WorkerFailed(ref cause) => cause.description(),
-            WorkerNotFound => "task not found",
-            CannotSuspend => "cannot suspend worker",
-        }
+error_chain! {
+    links {
+        Flow(flow::Error, flow::ErrorKind);
     }
-
-    fn cause(&self) -> Option<&error::Error> {
-        if let Error::WorkerFailed(ref cause) = *self {
-            Some(cause.as_ref())
-        } else {
-            None
-        }
+    foreign_links {
+        Serde(serde_json::Error);
     }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Error::WorkerFailed(ref cause) = *self {
-            cause.fmt(f)
-        } else {
-            use std::error::Error;
-            f.write_str(self.description())
-        }
-    }
-}
-
-
-impl From<Box<error::Error>> for Error {
-    fn from(error: Box<error::Error>) -> Self {
-        Error::WorkerFailed(error)
-    }
-}
-
-impl From<flow::Error> for Error {
-    fn from(error: flow::Error) -> Self {
-        Error::ConnectorFail(error)
+    errors {
+        ConnectionClosed
+        UnexpectedState
+        IllegalEventName(s: String)
+        Canceled
     }
 }
 
@@ -169,108 +106,141 @@ impl<T: Session, R: Flow> Context<T, R> {
         }
     }
 
-    fn recv(&mut self) -> Result<Input, Error> {
-        match self.client.pull()? {
-            Some(content) => {
-                debug!("Recv => {}", content);
-                if let Ok(Value::Object(mut data)) = Value::from_str(&content) {
-                    if let Some(Value::String(event)) = data.remove("event") {
-                        if event == "request" {
-                            match data.remove("data") {
-                                Some(Value::Object(mut data)) => {
-                                    let service = match data.remove("service") {
-                                        Some(Value::String(data)) => data,
-                                        _ => return Err(Error::IllegalRequestFormat),
-                                    };
-                                    let action = match data.remove("action") {
-                                        Some(Value::String(data)) => data,
-                                        _ => return Err(Error::IllegalRequestFormat),
-                                    };
-                                    let payload = match data.remove("payload") {
-                                        Some(Value::Object(data)) => data,
-                                        _ => return Err(Error::IllegalRequestFormat),
-                                    };
-                                    let request = Request {
-                                        action: action,
-                                        payload: payload,
-                                    };
-                                    Ok(Input::Request(service, request))
-                                },
-                                Some(_) => Err(Error::IllegalDataFormat),
-                                None => Err(Error::DataNotProvided),
-                            }
-                        } else if event == "next" {
-                            let request = match data.remove("data") {
-                                Some(Value::Object(mut data)) => {
-                                    let action = match data.remove("action") {
-                                        Some(Value::String(data)) => data,
-                                        _ => return Err(Error::IllegalRequestFormat),
-                                    };
-                                    let payload = match data.remove("payload") {
-                                        Some(Value::Object(data)) => data,
-                                        _ => return Err(Error::IllegalRequestFormat),
-                                    };
-                                    let request = Request {
-                                        action: action,
-                                        payload: payload,
-                                    };
-                                    Some(request)
-                                },
-                                Some(Value::Null) => None,
-                                Some(_) => {
-                                    return Err(Error::IllegalDataFormat);
-                                },
-                                None => None,
-                            };
-                            Ok(Input::Next(request))
-                        } else if event == "resume" {
-                            if let Some(Value::Number(task_id)) = data.remove("data") {
-                                if let Some(task_id) = task_id.as_u64() {
-                                    Ok(Input::Resume(task_id as usize))
-                                } else {
-                                    Err(Error::IllegalTaskId)
-                                }
-                            } else {
-                                Err(Error::IllegalDataFormat)
-                            }
-                        } else if event == "suspend" {
-                            Ok(Input::Suspend)
-                        } else if event == "cancel" {
-                            Err(Error::Canceled)
-                        } else {
-                            Err(Error::IllegalEventName(event))
-                        }
-                    } else {
-                        Err(Error::IllegalEventType)
-                    }
-
+    fn recv(&mut self) -> Result<Input> {
+        let content = self.client.pull()?.ok_or(ErrorKind::ConnectionClosed)?;
+        debug!("Recv => {}", content);
+        let value: Value = from_str(&content)?;
+        let mut object: Object = from_value(value)?;
+        let event: String = from_value(object.remove("event").unwrap_or_default())?;
+        match event.as_ref() {
+            "request" => {
+                let mut data: Object = from_value(object.remove("data").unwrap_or_default())?;
+                let service: String = from_value(data.remove("service").unwrap_or_default())?;
+                let action: String = from_value(data.remove("action").unwrap_or_default())?;
+                let payload: Object = from_value(data.remove("payload").unwrap_or_default())?;
+                let request = Request {
+                    action: action,
+                    payload: payload,
+                };
+                Ok(Input::Request(service, request))
+            },
+            "next" => {
+                let data: Option<Object> = from_value(object.remove("data").unwrap_or_default())?;
+                if let Some(mut data) = data {
+                    let action: String = from_value(data.remove("action").unwrap_or_default())?;
+                    let payload: Object = from_value(data.remove("payload").unwrap_or_default())?;
+                    let request = Request {
+                        action: action,
+                        payload: payload,
+                    };
+                    Ok(Input::Next(Some(request)))
                 } else {
-                    Err(Error::IllegalJsonFormat)
+                    Ok(Input::Next(None))
                 }
             },
-            None => Err(Error::ConnectionClosed),
+            "resume" => {
+                let task_id: u64 = from_value(object.remove("data").unwrap_or_default())?;
+                Ok(Input::Resume(task_id as usize))
+            },
+            "suspend" => {
+                Ok(Input::Suspend)
+            },
+            "cancel" => {
+                Err(ErrorKind::Canceled.into())
+            },
+            event => {
+                Err(ErrorKind::IllegalEventName(event.into()).into())
+            },
         }
+
+        /*
+        if event == "request" {
+            match data.remove("data") {
+                Some(Value::Object(mut data)) => {
+                    let service = match data.remove("service") {
+                        Some(Value::String(data)) => data,
+                        _ => return Err(Error::IllegalRequestFormat),
+                    };
+                    let action = match data.remove("action") {
+                        Some(Value::String(data)) => data,
+                        _ => return Err(Error::IllegalRequestFormat),
+                    };
+                    let payload = match data.remove("payload") {
+                        Some(Value::Object(data)) => data,
+                        _ => return Err(Error::IllegalRequestFormat),
+                    };
+                    let request = Request {
+                        action: action,
+                        payload: payload,
+                    };
+                    Ok(Input::Request(service, request))
+                },
+                Some(_) => Err(Error::IllegalDataFormat),
+                None => Err(Error::DataNotProvided),
+            }
+        } else if event == "next" {
+            let request = match data.remove("data") {
+                Some(Value::Object(mut data)) => {
+                    let action = match data.remove("action") {
+                        Some(Value::String(data)) => data,
+                        _ => return Err(Error::IllegalRequestFormat),
+                    };
+                    let payload = match data.remove("payload") {
+                        Some(Value::Object(data)) => data,
+                        _ => return Err(Error::IllegalRequestFormat),
+                    };
+                    let request = Request {
+                        action: action,
+                        payload: payload,
+                    };
+                    Some(request)
+                },
+                Some(Value::Null) => None,
+                Some(_) => {
+                    return Err(Error::IllegalDataFormat);
+                },
+                None => None,
+            };
+            Ok(Input::Next(request))
+        } else if event == "resume" {
+            if let Some(Value::Number(task_id)) = data.remove("data") {
+                if let Some(task_id) = task_id.as_u64() {
+                    Ok(Input::Resume(task_id as usize))
+                } else {
+                    Err(Error::IllegalTaskId)
+                }
+            } else {
+                Err(Error::IllegalDataFormat)
+            }
+        } else if event == "suspend" {
+            Ok(Input::Suspend)
+        } else if event == "cancel" {
+            Err(Error::Canceled)
+        } else {
+            Err(Error::IllegalEventName(event))
+        }
+        */
     }
 
-    pub fn recv_request_or_resume(&mut self) -> Result<Alternative<(String, Request), TaskId>, Error> {
+    pub fn recv_request_or_resume(&mut self) -> Result<Alternative<(String, Request), TaskId>> {
         match self.recv() {
             Ok(Input::Request(service, request)) => Ok(Alternative::Usual((service, request))),
             Ok(Input::Resume(task_id)) => Ok(Alternative::Unusual(task_id)),
-            Ok(_) => Err(Error::UnexpectedState),
+            Ok(_) => Err(ErrorKind::UnexpectedState.into()),
             Err(ie) => Err(ie),
         }
     }
 
-    pub fn recv_next_or_suspend(&mut self) -> Result<Alternative<Option<Request>, ()>, Error> {
+    pub fn recv_next_or_suspend(&mut self) -> Result<Alternative<Option<Request>, ()>> {
         match self.recv() {
             Ok(Input::Next(req)) => Ok(Alternative::Usual(req)),
             Ok(Input::Suspend) => Ok(Alternative::Unusual(())),
-            Ok(_) => Err(Error::UnexpectedState),
+            Ok(_) => Err(ErrorKind::UnexpectedState.into()),
             Err(ie) => Err(ie),
         }
     }
 
-    pub fn send(&mut self, out: Output) -> Result<(), Error> {
+    pub fn send(&mut self, out: Output) -> Result<()> {
         let json = match out {
             Output::Item(data) =>
                 json!({"event": "item", "data": data}),

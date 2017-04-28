@@ -1,10 +1,9 @@
+use std::thread;
 use std::collections::HashMap;
 use slab::Slab;
-
-use std::thread;
 use service::Service;
 use session::{self, Alternative, Context, Output, Builder, Session};
-use worker::{Realize, Shortcut};
+use worker::{self, Realize, Shortcut};
 use flow::Flow;
 
 // TODO Change services on the fly
@@ -28,6 +27,20 @@ impl<T: Session, B: Builder<T>> Suite<T, B> {
 
 }
 
+error_chain! {
+    links {
+        Session(session::Error, session::ErrorKind);
+        Worker(worker::Error, worker::ErrorKind);
+    }
+    foreign_links {
+    }
+    errors {
+        ServiceNotFound
+        CannotSuspend
+        CannotResume
+    }
+}
+
 pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
     where B: Builder<T>, T: Session, R: Flow {
 
@@ -41,14 +54,12 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
     let mut suspended_workers = Slab::with_capacity(10);
     loop { // Session loop
         debug!("Begin new request processing for {}", who);
-        let result: Result<(), session::Error> = (|session: &mut Context<T, R>| {
+        let result: Result<()> = (|session: &mut Context<T, R>| {
             loop { // Request loop
                 let mut worker = match session.recv_request_or_resume()? {
                     Alternative::Usual((service_name, request)) => {
-                        let service = match suite.services.get(&service_name) {
-                            Some(value) => value,
-                            None => return Err(session::Error::ServiceNotFound),
-                        };
+                        let service = suite.services.get(&service_name)
+                            .ok_or(Error::from(ErrorKind::ServiceNotFound))?;
 
                         let mut worker = service.route(&request);
 
@@ -71,7 +82,7 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                                 worker
                             },
                             None => {
-                                return Err(session::Error::WorkerNotFound);
+                                return Err(ErrorKind::CannotResume.into());
                             },
                         }
                     },
@@ -110,7 +121,7 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                                 },
                                 Err(_) => {
                                     // TODO Conside to continue worker (don't fail)
-                                    return Err(session::Error::CannotSuspend);
+                                    return Err(ErrorKind::CannotSuspend.into());
                                 },
                             }
                         },
@@ -120,11 +131,11 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
         })(&mut session);
         // Inform user if
         if let Err(reason) = result {
-            let output = match reason {
+            let output = match *reason.kind() {
                 // TODO Refactor cancel (rename to StopAll and add CancelWorker)
-                session::Error::Canceled => continue,
-                session::Error::ConnectorFail(_) => break,
-                session::Error::ConnectionClosed => break,
+                ErrorKind::Session(session::ErrorKind::Canceled) => continue,
+                ErrorKind::Session(session::ErrorKind::Flow(_)) => break,
+                ErrorKind::Session(session::ErrorKind::ConnectionClosed) => break,
                 _ => {
                     warn!("Request processing {} have catch an error {:?}", who, reason);
                     Output::Fail(reason.to_string())
