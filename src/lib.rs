@@ -5,8 +5,6 @@ extern crate slab;
 #[cfg(feature = "wsmould")]
 extern crate websocket;
 
-#[macro_use]
-pub mod macros;
 pub mod service;
 pub mod worker;
 pub mod session;

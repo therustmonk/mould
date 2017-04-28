@@ -1,6 +1,7 @@
 use session::{Request, Object};
 use extractor;
 
+// TODO Remove Extractor kind end replace to strict deserealization
 error_chain! {
     links {
         Extractor(extractor::Error, extractor::ErrorKind);
