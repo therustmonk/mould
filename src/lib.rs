@@ -12,6 +12,7 @@ pub mod session;
 pub mod server;
 pub mod prelude;
 pub mod flow;
+pub mod extractor;
 
 pub use session::Session;
 pub use session::Builder;

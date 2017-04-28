@@ -1,7 +1,8 @@
 //! Minimal set of imports to implement handler with workers.
 
 pub use session::Request;
-pub use session::Extractor;
+
+pub use extractor::Extractor;
 
 pub use service::Service;
 
