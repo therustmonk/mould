@@ -158,13 +158,13 @@ pub mod wsmould {
 
     impl From<WebSocketError> for flow::Error {
         fn from(_: WebSocketError) -> Self {
-            flow::Error::ConnectionBroken
+            flow::ErrorKind::ConnectionBroken.into()
         }
     }
 
     impl From<Utf8Error> for flow::Error {
         fn from(_: Utf8Error) -> Self {
-            flow::Error::BadMessageEncoding
+            flow::ErrorKind::BadMessageEncoding.into()
         }
     }
 
@@ -253,7 +253,7 @@ pub mod iomould {
 
     impl From<io::Error> for flow::Error {
         fn from(_: io::Error) -> Self {
-            flow::Error::ConnectionBroken
+            flow::ErrorKind::ConnectionBroken.into()
         }
     }
 

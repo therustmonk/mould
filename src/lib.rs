@@ -1,4 +1,5 @@
 #[macro_use] extern crate log;
+#[macro_use] extern crate error_chain;
 #[macro_use] extern crate serde_json;
 extern crate slab;
 #[cfg(feature = "wsmould")]
