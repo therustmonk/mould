@@ -1,9 +1,13 @@
 use serde_json;
 use session::Session;
+use permission;
 
 pub type Any = serde_json::Value;
 
 error_chain! {
+    links {
+        Permission(permission::Error, permission::ErrorKind);
+    }
     foreign_links {
         Serde(serde_json::Error);
     }
