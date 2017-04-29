@@ -15,6 +15,7 @@ wsmould = ["hyper", "websocket"]
 [dependencies]
 log = "0.3.7"
 error-chain = "0.10.0"
+serde = "1.0.2"
 serde_json = "1.0.0"
 slab = "0.3.0"
 hyper = { version = "0.10.8", optional = true }

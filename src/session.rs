@@ -42,23 +42,27 @@ pub struct Context<T: Session, R: Flow> {
     session: T,
 }
 
+pub type Request = Value;
+
+/*
 pub struct Request {
     pub action: String,
     pub payload: Object,
 }
+*/
 
 pub type TaskId = usize;
 
 pub enum Input {
-    Request(String, Request),
-    Next(Option<Request>),
+    Request(String, String, Value),
+    Next(Option<Value>),
     Suspend,
     Resume(TaskId),
 }
 
 pub enum Output {
     Ready,
-    Item(Object),
+    Item(Value),
     Done,
     Reject(String),
     Fail(String),
@@ -118,26 +122,12 @@ impl<T: Session, R: Flow> Context<T, R> {
                 let mut data: Object = from_value(object.remove("data").unwrap_or_default())?;
                 let service: String = from_value(data.remove("service").unwrap_or_default())?;
                 let action: String = from_value(data.remove("action").unwrap_or_default())?;
-                let payload: Object = from_value(data.remove("payload").unwrap_or_default())?;
-                let request = Request {
-                    action: action,
-                    payload: payload,
-                };
-                Ok(Input::Request(service, request))
+                let payload: Value = from_value(data.remove("payload").unwrap_or_default())?;
+                Ok(Input::Request(service, action, payload))
             },
             "next" => {
-                let data: Option<Object> = from_value(object.remove("data").unwrap_or_default())?;
-                if let Some(mut data) = data {
-                    let action: String = from_value(data.remove("action").unwrap_or_default())?;
-                    let payload: Object = from_value(data.remove("payload").unwrap_or_default())?;
-                    let request = Request {
-                        action: action,
-                        payload: payload,
-                    };
-                    Ok(Input::Next(Some(request)))
-                } else {
-                    Ok(Input::Next(None))
-                }
+                let data: Option<Value> = from_value(object.remove("data").unwrap_or_default())?;
+                Ok(Input::Next(data))
             },
             "resume" => {
                 let task_id: u64 = from_value(object.remove("data").unwrap_or_default())?;
@@ -155,9 +145,9 @@ impl<T: Session, R: Flow> Context<T, R> {
         }
     }
 
-    pub fn recv_request_or_resume(&mut self) -> Result<Alternative<(String, Request), TaskId>> {
+    pub fn recv_request_or_resume(&mut self) -> Result<Alternative<(String, String, Request), TaskId>> {
         match self.recv() {
-            Ok(Input::Request(service, request)) => Ok(Alternative::Usual((service, request))),
+            Ok(Input::Request(service, action, request)) => Ok(Alternative::Usual((service, action, request))),
             Ok(Input::Resume(task_id)) => Ok(Alternative::Unusual(task_id)),
             Ok(_) => Err(ErrorKind::UnexpectedState.into()),
             Err(ie) => Err(ie),
@@ -175,6 +165,7 @@ impl<T: Session, R: Flow> Context<T, R> {
 
     pub fn send(&mut self, out: Output) -> Result<()> {
         let json = match out {
+            // TODO Use Event & `serde` here
             Output::Item(data) =>
                 json!({"event": "item", "data": data}),
             Output::Ready =>

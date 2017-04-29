@@ -58,13 +58,13 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
         let result: Result<()> = (|session: &mut Context<T, R>| {
             loop { // Request loop
                 let mut worker = match session.recv_request_or_resume()? {
-                    Alternative::Usual((service_name, request)) => {
+                    Alternative::Usual((service_name, action, request)) => {
                         let service = suite.services.get(&service_name)
                             .ok_or(Error::from(ErrorKind::ServiceNotFound))?;
 
-                        let mut worker = service.route(&request)?;
+                        let mut worker = service.route(&action)?;
 
-                        match worker.prepare(session, request)? {
+                        match (worker.prepare)(session, request)? {
                             Shortcut::Done => {
                                 session.send(Output::Done)?;
                                 continue;
@@ -92,7 +92,7 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                     session.send(Output::Ready)?;
                     match session.recv_next_or_suspend()? {
                         Alternative::Usual(option_request) => {
-                            match worker.realize(session, option_request)? {
+                            match (worker.realize)(session, option_request)? {
                                 Realize::OneItem(item) => {
                                     session.send(Output::Item(item))?;
                                 },

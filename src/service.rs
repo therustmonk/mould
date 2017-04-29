@@ -1,5 +1,9 @@
-use session::Request;
-use worker::Worker;
+use std::rc::Rc;
+use std::cell::RefCell;
+use serde::{Deserialize, Serialize};
+use serde_json::{self, Value};
+use session::Session;
+use worker::{self, Worker, Shortcut, Realize};
 
 error_chain! {
     errors {
@@ -12,8 +16,57 @@ error_chain! {
 /// There is `Send` restriction, because reference to services sends through
 /// thread boundaries to user's session (connection) routine.
 /// It needs `Sync`, because service get access from multiple threads.
-pub trait Service<T>: Send + Sync + 'static {
+pub trait Service<T: Session>: Send + Sync + 'static {
+
     /// Never return error, but rejecting Worker created
-    fn route(&self, request: &Request) -> Result<Box<Worker<T>>>;
+    fn route(&self, action: &str) -> Result<Action<T>>;
+}
+
+pub struct Action<T: 'static> {
+    pub prepare: Box<FnMut(&mut T, Value) -> worker::Result<Shortcut>>,
+    pub realize: Box<FnMut(&mut T, Option<Value>) -> worker::Result<Realize<Value>>>,
+}
+
+impl<T: Session> Action<T> {
+    pub fn from_worker<W, R, I, O>(worker: W) -> Self
+        where for<'de> R: Deserialize<'de>, for<'de> I: Deserialize<'de>, O: Serialize,
+              W: Worker<T, Request=R, In=I, Out=O> + 'static,
+    {
+        let rcw = Rc::new(RefCell::new(worker));
+        let worker = rcw.clone();
+        let prepare = move |session: &mut T, value: Value| {
+            let p = serde_json::from_value(value)?;
+            worker.borrow_mut().prepare(session, p)
+        };
+        let worker = rcw.clone();
+        let realize = move |session: &mut T, value: Option<Value>| {
+            let value = {
+                if let Some(value) = value {
+                    serde_json::from_value(value)?
+                } else {
+                    None
+                }
+            };
+            let realized = worker.borrow_mut().realize(session, value)?;
+            let result = match realized {
+                Realize::OneItem(t) => {
+                    let t = serde_json::to_value(t)?;
+                    Realize::OneItem(t)
+                },
+                Realize::OneItemAndDone(t) => {
+                    let t = serde_json::to_value(t)?;
+                    Realize::OneItemAndDone(t)
+                },
+                Realize::Reject(s) => Realize::Reject(s),
+                Realize::Empty => Realize::Empty,
+                Realize::Done => Realize::Done,
+            };
+            Ok(result)
+        };
+        Action {
+            prepare: Box::new(prepare),
+            realize: Box::new(realize),
+        }
+    }
 }
 
