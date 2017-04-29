@@ -16,7 +16,8 @@
 use std::str;
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
-use serde_json::{self, Value, Map, from_str, from_value};
+use serde_json::{self, Map, from_str, from_value};
+pub use serde_json::Value;
 use flow::{self, Flow};
 
 pub type Object = Map<String, Value>;

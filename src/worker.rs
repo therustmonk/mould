@@ -6,6 +6,10 @@ error_chain! {
     links {
         Extractor(extractor::Error, extractor::ErrorKind);
     }
+    errors {
+        AppFault
+        SysFault
+    }
 }
 
 pub enum Realize {
