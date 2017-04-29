@@ -4,7 +4,7 @@ pub use session::Request;
 
 pub use extractor::Extractor;
 
-pub use service::Service;
+pub use service;
 
 pub use worker; // for Result and Error
 pub use worker::Worker;
