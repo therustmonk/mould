@@ -1,7 +1,7 @@
 use std::thread;
 use std::collections::HashMap;
 use slab::Slab;
-use service::Service;
+use service::{self, Service};
 use session::{self, Alternative, Context, Output, Builder, Session};
 use worker::{self, Realize, Shortcut};
 use flow::Flow;
@@ -31,6 +31,7 @@ error_chain! {
     links {
         Session(session::Error, session::ErrorKind);
         Worker(worker::Error, worker::ErrorKind);
+        Service(service::Error, service::ErrorKind);
     }
     foreign_links {
     }
@@ -61,7 +62,7 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                         let service = suite.services.get(&service_name)
                             .ok_or(Error::from(ErrorKind::ServiceNotFound))?;
 
-                        let mut worker = service.route(&request);
+                        let mut worker = service.route(&request)?;
 
                         match worker.prepare(session, request)? {
                             Shortcut::Done => {

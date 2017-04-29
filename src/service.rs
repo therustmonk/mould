@@ -1,6 +1,12 @@
 use session::Request;
 use worker::Worker;
 
+error_chain! {
+    errors {
+        ActionNotFound
+    }
+}
+
 /// Service looks into session or request to build corresponding worker.
 ///
 /// There is `Send` restriction, because reference to services sends through
@@ -8,6 +14,6 @@ use worker::Worker;
 /// It needs `Sync`, because service get access from multiple threads.
 pub trait Service<T>: Send + Sync + 'static {
     /// Never return error, but rejecting Worker created
-    fn route(&self, request: &Request) -> Box<Worker<T>>;
+    fn route(&self, request: &Request) -> Result<Box<Worker<T>>>;
 }
 
