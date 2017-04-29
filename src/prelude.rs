@@ -8,6 +8,5 @@ pub use service::Service;
 
 pub use worker; // for Result and Error
 pub use worker::Worker;
-pub use worker::RejectWorker;
 pub use worker::Realize;
 pub use worker::Shortcut;
