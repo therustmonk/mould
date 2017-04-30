@@ -1,10 +1,13 @@
 
 error_chain! {
+    errors {
+        AccessDenied
+    }
 }
 
-pub trait Permission {
+pub trait Rights {
 }
 
-pub trait Have<T: Permission> {
-    fn have_permissions(&self, permissions: &[T]) -> Result<()>;
+pub trait Require<T: Rights> {
+    fn require(&self, right: &T) -> Result<()>;
 }

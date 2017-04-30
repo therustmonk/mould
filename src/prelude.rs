@@ -4,9 +4,6 @@ pub use session::Session;
 
 pub use service;
 
-pub use worker; // for Result and Error
-pub use worker::Worker;
-pub use worker::Realize;
-pub use worker::Shortcut;
+pub use worker::{self, Worker, Shortcut, Realize};
 
-pub use permission::{Permission, Have};
+pub use permission::{Rights, Require};
