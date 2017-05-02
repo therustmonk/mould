@@ -43,7 +43,7 @@ pub type Request = Value;
 
 pub type TaskId = usize;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "event", content = "data", rename_all = "lowercase")]
 pub enum Input {
     Request {
@@ -57,7 +57,7 @@ pub enum Input {
     Cancel,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize,Deserialize)]
 #[serde(tag = "event", content = "data", rename_all = "lowercase")]
 pub enum Output {
     Ready,
