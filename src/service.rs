@@ -24,7 +24,7 @@ pub trait Service<T: Session>: Send + Sync + 'static {
 
 pub struct Action<T: 'static> {
     pub prepare: Box<FnMut(&mut T, Value) -> worker::Result<Shortcut>>,
-    pub realize: Box<FnMut(&mut T, Option<Value>) -> worker::Result<Realize<Value>>>,
+    pub realize: Box<FnMut(&mut T, Value) -> worker::Result<Realize<Value>>>,
 }
 
 impl<T: Session> Action<T> {
@@ -39,14 +39,8 @@ impl<T: Session> Action<T> {
             worker.borrow_mut().prepare(session, p)
         };
         let worker = rcw.clone();
-        let realize = move |session: &mut T, value: Option<Value>| {
-            let value = {
-                if let Some(value) = value {
-                    serde_json::from_value(value)?
-                } else {
-                    None
-                }
-            };
+        let realize = move |session: &mut T, value: Value| {
+            let value = serde_json::from_value(value)?;
             let realized = worker.borrow_mut().realize(session, value)?;
             let result = match realized {
                 Realize::OneItem(t) => {

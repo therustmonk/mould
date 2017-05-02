@@ -16,12 +16,12 @@
 use std::str;
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
-use serde_json::{self, Map, from_str, from_value};
+use serde_json;
 pub use serde_json::Value;
 use flow::{self, Flow};
 
-pub type Object = Map<String, Value>;
-pub type Array = Vec<Value>;
+//pub type Object = Map<String, Value>;
+//pub type Array = Vec<Value>;
 
 pub trait Builder<T: Session>: Send + Sync + 'static {
     fn build(&self) -> T;
@@ -44,22 +44,24 @@ pub struct Context<T: Session, R: Flow> {
 
 pub type Request = Value;
 
-/*
-pub struct Request {
-    pub action: String,
-    pub payload: Object,
-}
-*/
-
 pub type TaskId = usize;
 
+#[derive(Deserialize)]
+#[serde(tag = "event", content = "data", rename_all = "lowercase")]
 pub enum Input {
-    Request(String, String, Value),
-    Next(Option<Value>),
+    Request {
+        service: String,
+        action: String,
+        payload: Value,
+    },
+    Next(Value),
     Suspend,
     Resume(TaskId),
+    Cancel,
 }
 
+#[derive(Serialize)]
+#[serde(tag = "event", content = "data", rename_all = "lowercase")]
 pub enum Output {
     Ready,
     Item(Value),
@@ -84,7 +86,7 @@ error_chain! {
     errors {
         ConnectionClosed
         UnexpectedState
-        IllegalEventName(s: String)
+        //IllegalEventName(s: String)
         Canceled
     }
 }
@@ -114,47 +116,24 @@ impl<T: Session, R: Flow> Context<T, R> {
     fn recv(&mut self) -> Result<Input> {
         let content = self.client.pull()?.ok_or(ErrorKind::ConnectionClosed)?;
         debug!("Recv => {}", content);
-        let value: Value = from_str(&content)?;
-        let mut object: Object = from_value(value)?;
-        let event: String = from_value(object.remove("event").unwrap_or_default())?;
-        match event.as_ref() {
-            "request" => {
-                let mut data: Object = from_value(object.remove("data").unwrap_or_default())?;
-                let service: String = from_value(data.remove("service").unwrap_or_default())?;
-                let action: String = from_value(data.remove("action").unwrap_or_default())?;
-                let payload: Value = from_value(data.remove("payload").unwrap_or_default())?;
-                Ok(Input::Request(service, action, payload))
-            },
-            "next" => {
-                let data: Option<Value> = from_value(object.remove("data").unwrap_or_default())?;
-                Ok(Input::Next(data))
-            },
-            "resume" => {
-                let task_id: u64 = from_value(object.remove("data").unwrap_or_default())?;
-                Ok(Input::Resume(task_id as usize))
-            },
-            "suspend" => {
-                Ok(Input::Suspend)
-            },
-            "cancel" => {
-                Err(ErrorKind::Canceled.into())
-            },
-            event => {
-                Err(ErrorKind::IllegalEventName(event.into()).into())
-            },
+        let input = serde_json::from_str(&content)?;
+        if let Input::Cancel = input {
+            Err(ErrorKind::Canceled.into())
+        } else {
+            Ok(input)
         }
     }
 
     pub fn recv_request_or_resume(&mut self) -> Result<Alternative<(String, String, Request), TaskId>> {
         match self.recv() {
-            Ok(Input::Request(service, action, request)) => Ok(Alternative::Usual((service, action, request))),
+            Ok(Input::Request { service, action, payload }) => Ok(Alternative::Usual((service, action, payload))),
             Ok(Input::Resume(task_id)) => Ok(Alternative::Unusual(task_id)),
             Ok(_) => Err(ErrorKind::UnexpectedState.into()),
             Err(ie) => Err(ie),
         }
     }
 
-    pub fn recv_next_or_suspend(&mut self) -> Result<Alternative<Option<Request>, ()>> {
+    pub fn recv_next_or_suspend(&mut self) -> Result<Alternative<Request, ()>> {
         match self.recv() {
             Ok(Input::Next(req)) => Ok(Alternative::Usual(req)),
             Ok(Input::Suspend) => Ok(Alternative::Unusual(())),
@@ -164,22 +143,7 @@ impl<T: Session, R: Flow> Context<T, R> {
     }
 
     pub fn send(&mut self, out: Output) -> Result<()> {
-        let json = match out {
-            // TODO Use Event & `serde` here
-            Output::Item(data) =>
-                json!({"event": "item", "data": data}),
-            Output::Ready =>
-                json!({"event": "ready", "data": ()}),
-            Output::Done =>
-                json!({"event": "done", "data": ()}),
-            Output::Reject(message) =>
-                json!({"event": "reject", "data": message}),
-            Output::Fail(message) =>
-                json!({"event": "fail", "data": message}),
-            Output::Suspended(task_id) =>
-                json!({"event": "suspended", "data": task_id}),
-        };
-        let content = json.to_string();
+        let content = serde_json::to_string(&out)?;
         debug!("Send <= {}", content);
         self.client.push(content).map_err(Error::from)
     }

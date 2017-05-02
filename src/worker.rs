@@ -64,7 +64,7 @@ pub trait Worker<T: Session> {
     fn prepare(&mut self, _: &mut T, _: Self::Request) -> Result<Shortcut> {
         Ok(Shortcut::Tuned)
     }
-    fn realize(&mut self, _: &mut T, _: Option<Self::In>) -> Result<Realize<Self::Out>> {
+    fn realize(&mut self, _: &mut T, _: Self::In) -> Result<Realize<Self::Out>> {
         Err(ErrorKind::Unimplemented.into())
     }
 }

@@ -91,8 +91,8 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                 loop {
                     session.send(Output::Ready)?;
                     match session.recv_next_or_suspend()? {
-                        Alternative::Usual(option_request) => {
-                            match (worker.realize)(session, option_request)? {
+                        Alternative::Usual(request) => {
+                            match (worker.realize)(session, request)? {
                                 Realize::OneItem(item) => {
                                     session.send(Output::Item(item))?;
                                 },
