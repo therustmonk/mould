@@ -121,20 +121,18 @@ impl<T: Session, R: Flow> Context<T, R> {
     }
 
     pub fn recv_request_or_resume(&mut self) -> Result<Alternative<(String, String, Request), TaskId>> {
-        match self.recv() {
-            Ok(Input::Request { service, action, payload }) => Ok(Alternative::Usual((service, action, payload))),
-            Ok(Input::Resume(task_id)) => Ok(Alternative::Unusual(task_id)),
-            Ok(_) => Err(ErrorKind::UnexpectedState.into()),
-            Err(ie) => Err(ie),
+        match self.recv()? {
+            Input::Request { service, action, payload } => Ok(Alternative::Usual((service, action, payload))),
+            Input::Resume(task_id) => Ok(Alternative::Unusual(task_id)),
+            _ => Err(ErrorKind::UnexpectedState.into()),
         }
     }
 
     pub fn recv_next_or_suspend(&mut self) -> Result<Alternative<Request, ()>> {
-        match self.recv() {
-            Ok(Input::Next(req)) => Ok(Alternative::Usual(req)),
-            Ok(Input::Suspend) => Ok(Alternative::Unusual(())),
-            Ok(_) => Err(ErrorKind::UnexpectedState.into()),
-            Err(ie) => Err(ie),
+        match self.recv()? {
+            Input::Next(req) => Ok(Alternative::Usual(req)),
+            Input::Suspend => Ok(Alternative::Unusual(())),
+            _ => Err(ErrorKind::UnexpectedState.into()),
         }
     }
 
