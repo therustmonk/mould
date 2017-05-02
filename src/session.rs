@@ -20,9 +20,6 @@ use serde_json;
 pub use serde_json::Value;
 use flow::{self, Flow};
 
-//pub type Object = Map<String, Value>;
-//pub type Array = Vec<Value>;
-
 pub trait Builder<T: Session>: Send + Sync + 'static {
     fn build(&self) -> T;
 }
@@ -86,7 +83,6 @@ error_chain! {
     errors {
         ConnectionClosed
         UnexpectedState
-        //IllegalEventName(s: String)
         Canceled
     }
 }
