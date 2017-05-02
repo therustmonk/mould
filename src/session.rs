@@ -169,9 +169,9 @@ impl<T: Session, R: Flow> Context<T, R> {
             Output::Item(data) =>
                 json!({"event": "item", "data": data}),
             Output::Ready =>
-                json!({"event": "ready"}),
+                json!({"event": "ready", "data": ()}),
             Output::Done =>
-                json!({"event": "done"}),
+                json!({"event": "done", "data": ()}),
             Output::Reject(message) =>
                 json!({"event": "reject", "data": message}),
             Output::Fail(message) =>
