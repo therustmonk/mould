@@ -23,7 +23,7 @@ pub trait Service<T: Session>: Send + Sync + 'static {
 }
 
 pub struct Action<T: 'static> {
-    pub prepare: Box<FnMut(&mut T, Value) -> worker::Result<Shortcut>>,
+    pub prepare: Box<FnMut(&mut T, Value) -> worker::Result<Shortcut<Value>>>,
     pub realize: Box<FnMut(&mut T, Value) -> worker::Result<Realize<Value>>>,
 }
 
@@ -36,7 +36,17 @@ impl<T: Session> Action<T> {
         let worker = rcw.clone();
         let prepare = move |session: &mut T, value: Value| {
             let p = serde_json::from_value(value)?;
-            worker.borrow_mut().prepare(session, p)
+            let prepared = worker.borrow_mut().prepare(session, p)?;
+            let result = match prepared {
+                Shortcut::OneItemAndDone(t) => {
+                    let t = serde_json::to_value(t)?;
+                    Shortcut::OneItemAndDone(t)
+                },
+                Shortcut::Reject(s) => Shortcut::Reject(s),
+                Shortcut::Tuned => Shortcut::Tuned,
+                Shortcut::Done => Shortcut::Done,
+            };
+            Ok(result)
         };
         let worker = rcw.clone();
         let realize = move |session: &mut T, value: Value| {
@@ -46,10 +56,6 @@ impl<T: Session> Action<T> {
                 Realize::OneItem(t) => {
                     let t = serde_json::to_value(t)?;
                     Realize::OneItem(t)
-                },
-                Realize::OneItemAndDone(t) => {
-                    let t = serde_json::to_value(t)?;
-                    Realize::OneItemAndDone(t)
                 },
                 Realize::Reject(s) => Realize::Reject(s),
                 Realize::Empty => Realize::Empty,

@@ -69,6 +69,11 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                                 session.send(Output::Done)?;
                                 continue;
                             },
+                            Shortcut::OneItemAndDone(item) => {
+                                session.send(Output::Item(item))?;
+                                session.send(Output::Done)?;
+                                continue;
+                            },
                             Shortcut::Reject(reason) => {
                                 session.send(Output::Reject(reason))?;
                                 continue;
@@ -95,11 +100,6 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                             match (worker.realize)(session, request)? {
                                 Realize::OneItem(item) => {
                                     session.send(Output::Item(item))?;
-                                },
-                                Realize::OneItemAndDone(item) => {
-                                    session.send(Output::Item(item))?;
-                                    session.send(Output::Done)?;
-                                    break;
                                 },
                                 Realize::Reject(reason) => {
                                     session.send(Output::Reject(reason))?;
