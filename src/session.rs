@@ -63,7 +63,6 @@ pub enum Output {
     Ready,
     Item(Value),
     Done,
-    Reject(String),
     Fail(String),
     Suspended(TaskId),
 }

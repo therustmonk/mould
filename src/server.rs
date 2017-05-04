@@ -74,10 +74,6 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                                 session.send(Output::Done)?;
                                 continue;
                             },
-                            Shortcut::Reject(reason) => {
-                                session.send(Output::Reject(reason))?;
-                                continue;
-                            },
                             Shortcut::Tuned => (),
                         }
                         worker
@@ -100,10 +96,6 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                             match (worker.realize)(session, request)? {
                                 Realize::OneItem(item) => {
                                     session.send(Output::Item(item))?;
-                                },
-                                Realize::Reject(reason) => {
-                                    session.send(Output::Reject(reason))?;
-                                    break;
                                 },
                                 Realize::Empty => {
                                     thread::yield_now();

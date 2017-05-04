@@ -42,7 +42,6 @@ impl<T: Session> Action<T> {
                     let t = serde_json::to_value(t)?;
                     Shortcut::OneItemAndDone(t)
                 },
-                Shortcut::Reject(s) => Shortcut::Reject(s),
                 Shortcut::Tuned => Shortcut::Tuned,
                 Shortcut::Done => Shortcut::Done,
             };
@@ -57,7 +56,6 @@ impl<T: Session> Action<T> {
                     let t = serde_json::to_value(t)?;
                     Realize::OneItem(t)
                 },
-                Realize::Reject(s) => Realize::Reject(s),
                 Realize::Empty => Realize::Empty,
                 Realize::Done => Realize::Done,
             };

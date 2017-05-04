@@ -18,40 +18,14 @@ error_chain! {
 
 pub enum Realize<T> {
     OneItem(T),
-    Reject(String),
     Empty,
     Done,
 }
 
-impl<'a, T> From<&'a str> for Realize<T> {
-    fn from(s: &'a str) -> Self {
-        Realize::Reject(s.to_owned())
-    }
-}
-
-impl<T> From<String> for Realize<T> {
-    fn from(s: String) -> Self {
-        Realize::Reject(s)
-    }
-}
-
 pub enum Shortcut<T> {
     OneItemAndDone(T),
-    Reject(String),
     Tuned,
     Done,
-}
-
-impl<'a, T> From<&'a str> for Shortcut<T> {
-    fn from(s: &'a str) -> Self {
-        Shortcut::Reject(s.to_owned())
-    }
-}
-
-impl<T> From<String> for Shortcut<T> {
-    fn from(s: String) -> Self {
-        Shortcut::Reject(s)
-    }
 }
 
 pub trait Worker<T: Session> {
