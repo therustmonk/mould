@@ -149,14 +149,13 @@ pub mod wsmould {
     use std::thread;
     use std::io::ErrorKind;
     use std::sync::Arc;
-    use std::net::ToSocketAddrs;
+    use std::net::{ToSocketAddrs, TcpStream};
     use std::str::{self, Utf8Error};
     use std::time::{SystemTime, Duration};
-    use websocket::Server;
-    use websocket::message::{Message, Type};
-    use websocket::client::Client as WSClient;
-    use websocket::stream::TcpStream;
-    use websocket::result::{WebSocketResult, WebSocketError};
+    use websocket::sync::Server;
+    use websocket::message::{OwnedMessage, Message};
+    use websocket::sync::Client;
+    use websocket::result::WebSocketError;
     use session::{Builder, Session};
     use flow::{self, Flow};
 
@@ -172,9 +171,7 @@ pub mod wsmould {
         }
     }
 
-    pub type Client = WSClient<TcpStream>;
-
-    impl Flow for Client {
+    impl Flow for Client<TcpStream> {
         fn who(&self) -> String {
             let ip = self.peer_addr().unwrap();
             format!("WS IP {}", ip)
@@ -184,24 +181,23 @@ pub mod wsmould {
             let mut last_ping = SystemTime::now();
             let ping_interval = Duration::from_secs(20);
             loop {
-                let message: WebSocketResult<Message> = self.recv_message();
+                let message = self.recv_message();
                 match message {
                     Ok(message) => {
-                        match message.opcode {
-                            Type::Text => {
-                                let content = str::from_utf8(&*message.payload)?;
-                                return Ok(Some(content.to_owned()));
+                        match message {
+                            OwnedMessage::Text(content) => {
+                                return Ok(Some(content));
                             },
-                            Type::Close => {
+                            OwnedMessage::Close(_) => {
                                 return Ok(None);
                             },
-                            Type::Ping => {
-                                self.send_message(&Message::pong(message.payload))?;
+                            OwnedMessage::Ping(payload) => {
+                                self.send_message(&Message::pong(payload))?;
                             },
-                            Type::Pong => {
-                                trace!("pong received: {:?}", message.payload);
+                            OwnedMessage::Pong(payload) => {
+                                trace!("pong received: {:?}", payload);
                             },
-                            Type::Binary => (),
+                            OwnedMessage::Binary(_) => (),
                         }
                         // No need ping if interaction was successful
                         last_ping = SystemTime::now();
