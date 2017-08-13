@@ -42,6 +42,9 @@ error_chain! {
     }
 }
 
+/// Limit is necessary to prevent tasks overflow by a client.
+const SUSPEND_LIMIT: usize = 10;
+
 pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
     where B: Builder<T>, T: Session, R: Flow {
 
@@ -52,7 +55,7 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
     let mut session: Context<T, R> = Context::new(rut, suite.builder.build());
     // TODO Determine handler by action name (refactoring handler needed)
 
-    let mut suspended_workers = Slab::with_capacity(10);
+    let mut suspended_workers = Slab::with_capacity(SUSPEND_LIMIT);
     loop { // Session loop
         debug!("Begin new request processing for {}", who);
         let result: Result<()> = (|session: &mut Context<T, R>| {
@@ -79,13 +82,10 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                         worker
                     },
                     Alternative::Unusual(task_id) => {
-                        match suspended_workers.remove(task_id) {
-                            Some(worker) => {
-                                worker
-                            },
-                            None => {
-                                return Err(ErrorKind::CannotResume.into());
-                            },
+                        if suspended_workers.contains(task_id) {
+                            suspended_workers.remove(task_id)
+                        } else {
+                            return Err(ErrorKind::CannotResume.into());
                         }
                     },
                 };
@@ -107,15 +107,15 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                             }
                         },
                         Alternative::Unusual(()) => {
-                            match suspended_workers.insert(worker) {
-                                Ok(task_id) => {
-                                    session.send(Output::Suspended(task_id))?;
-                                    break;
-                                },
-                                Err(_) => {
-                                    // TODO Conside to continue worker (don't fail)
-                                    return Err(ErrorKind::CannotSuspend.into());
-                                },
+                            if suspended_workers.len() != suspended_workers.capacity() {
+                                let entry = suspended_workers.vacant_entry();
+                                let task_id = entry.key();
+                                entry.insert(worker);
+                                session.send(Output::Suspended(task_id))?;
+                                break;
+                            } else {
+                                // TODO Conside to continue worker (don't fail)
+                                return Err(ErrorKind::CannotSuspend.into());
                             }
                         },
                     }
