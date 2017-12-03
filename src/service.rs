@@ -17,7 +17,6 @@ error_chain! {
 /// thread boundaries to user's session (connection) routine.
 /// It needs `Sync`, because service get access from multiple threads.
 pub trait Service<T: Session>: Send + Sync + 'static {
-
     /// Never return error, but rejecting Worker created
     fn route(&self, action: &str) -> Result<Action<T>>;
 }
@@ -29,8 +28,11 @@ pub struct Action<T: 'static> {
 
 impl<T: Session> Action<T> {
     pub fn from_worker<W, R, I, O>(worker: W) -> Self
-        where for<'de> R: Deserialize<'de>, for<'de> I: Deserialize<'de>, O: Serialize,
-              W: Worker<T, Request=R, In=I, Out=O> + 'static,
+    where
+        for<'de> R: Deserialize<'de>,
+        for<'de> I: Deserialize<'de>,
+        O: Serialize,
+        W: Worker<T, Request = R, In = I, Out = O> + 'static,
     {
         let rcw = Rc::new(RefCell::new(worker));
         let worker = rcw.clone();
@@ -41,7 +43,7 @@ impl<T: Session> Action<T> {
                 Shortcut::OneItemAndDone(t) => {
                     let t = serde_json::to_value(t)?;
                     Shortcut::OneItemAndDone(t)
-                },
+                }
                 Shortcut::Tuned => Shortcut::Tuned,
                 Shortcut::Done => Shortcut::Done,
             };
@@ -55,7 +57,7 @@ impl<T: Session> Action<T> {
                 Realize::OneItem(t) => {
                     let t = serde_json::to_value(t)?;
                     Realize::OneItem(t)
-                },
+                }
                 Realize::Empty => Realize::Empty,
                 Realize::Done => Realize::Done,
             };
@@ -67,4 +69,3 @@ impl<T: Session> Action<T> {
         }
     }
 }
-

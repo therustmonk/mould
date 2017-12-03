@@ -1,3 +1,4 @@
-target
 Cargo.lock
-session.vim
+.env
+/target/
+**/*.rs.bk

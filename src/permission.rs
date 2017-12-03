@@ -5,8 +5,7 @@ error_chain! {
     }
 }
 
-pub trait Rights {
-}
+pub trait Rights {}
 
 pub trait Require<R: Rights> {
     fn require(&self, right: &R) -> Result<()>;

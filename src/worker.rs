@@ -40,4 +40,3 @@ pub trait Worker<T: Session> {
         Err(ErrorKind::Unimplemented.into())
     }
 }
-

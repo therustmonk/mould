@@ -24,7 +24,7 @@ pub trait Builder<T: Session>: Send + Sync + 'static {
     fn build(&self) -> T;
 }
 
-pub struct DefaultBuilder { }
+pub struct DefaultBuilder {}
 
 impl<T: Session + Default> Builder<T> for DefaultBuilder {
     fn build(&self) -> T {
@@ -57,7 +57,7 @@ pub enum Input {
     Cancel,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "event", content = "data", rename_all = "lowercase")]
 pub enum Output {
     Ready,
@@ -119,9 +119,15 @@ impl<T: Session, R: Flow> Context<T, R> {
         }
     }
 
-    pub fn recv_request_or_resume(&mut self) -> Result<Alternative<(String, String, Request), TaskId>> {
+    pub fn recv_request_or_resume(
+        &mut self,
+    ) -> Result<Alternative<(String, String, Request), TaskId>> {
         match self.recv()? {
-            Input::Request { service, action, payload } => Ok(Alternative::Usual((service, action, payload))),
+            Input::Request {
+                service,
+                action,
+                payload,
+            } => Ok(Alternative::Usual((service, action, payload))),
             Input::Resume(task_id) => Ok(Alternative::Unusual(task_id)),
             _ => Err(ErrorKind::UnexpectedState.into()),
         }
@@ -140,5 +146,4 @@ impl<T: Session, R: Flow> Context<T, R> {
         debug!("Send <= {}", content);
         self.client.push(content).map_err(Error::from)
     }
-
 }

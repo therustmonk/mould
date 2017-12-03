@@ -11,5 +11,3 @@ pub trait Flow {
     fn pull(&mut self) -> Result<Option<String>>;
     fn push(&mut self, content: String) -> Result<()>;
 }
-
-

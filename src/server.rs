@@ -13,7 +13,6 @@ pub struct Suite<T: Session, B: Builder<T>> {
 }
 
 impl<T: Session, B: Builder<T>> Suite<T, B> {
-
     pub fn new(builder: B) -> Self {
         Suite {
             builder: builder,
@@ -24,7 +23,6 @@ impl<T: Session, B: Builder<T>> Suite<T, B> {
     pub fn register<S: Service<T>>(&mut self, name: &str, service: S) {
         self.services.insert(name.to_owned(), Box::new(service));
     }
-
 }
 
 error_chain! {
@@ -46,7 +44,11 @@ error_chain! {
 const SUSPEND_LIMIT: usize = 10;
 
 pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
-    where B: Builder<T>, T: Session, R: Flow {
+where
+    B: Builder<T>,
+    T: Session,
+    R: Flow,
+{
 
     let who = rut.who();
 
@@ -56,14 +58,17 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
     // TODO Determine handler by action name (refactoring handler needed)
 
     let mut suspended_workers = Slab::with_capacity(SUSPEND_LIMIT);
-    loop { // Session loop
+    loop {
+        // Session loop
         debug!("Begin new request processing for {}", who);
         let result: Result<()> = (|session: &mut Context<T, R>| {
-            loop { // Request loop
+            loop {
+                // Request loop
                 let mut worker = match session.recv_request_or_resume()? {
                     Alternative::Usual((service_name, action, request)) => {
-                        let service = suite.services.get(&service_name)
-                            .ok_or(Error::from(ErrorKind::ServiceNotFound))?;
+                        let service = suite.services.get(&service_name).ok_or(Error::from(
+                            ErrorKind::ServiceNotFound,
+                        ))?;
 
                         let mut worker = service.route(&action)?;
 
@@ -71,23 +76,23 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                             Shortcut::Done => {
                                 session.send(Output::Done)?;
                                 continue;
-                            },
+                            }
                             Shortcut::OneItemAndDone(item) => {
                                 session.send(Output::Item(item))?;
                                 session.send(Output::Done)?;
                                 continue;
-                            },
+                            }
                             Shortcut::Tuned => (),
                         }
                         worker
-                    },
+                    }
                     Alternative::Unusual(task_id) => {
                         if suspended_workers.contains(task_id) {
                             suspended_workers.remove(task_id)
                         } else {
                             return Err(ErrorKind::CannotResume.into());
                         }
-                    },
+                    }
                 };
                 loop {
                     session.send(Output::Ready)?;
@@ -96,16 +101,16 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                             match (worker.realize)(session, request)? {
                                 Realize::OneItem(item) => {
                                     session.send(Output::Item(item))?;
-                                },
+                                }
                                 Realize::Empty => {
                                     thread::yield_now();
-                                },
+                                }
                                 Realize::Done => {
                                     session.send(Output::Done)?;
                                     break;
-                                },
+                                }
                             }
-                        },
+                        }
                         Alternative::Unusual(()) => {
                             if suspended_workers.len() != suspended_workers.capacity() {
                                 let entry = suspended_workers.vacant_entry();
@@ -117,7 +122,7 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                                 // TODO Conside to continue worker (don't fail)
                                 return Err(ErrorKind::CannotSuspend.into());
                             }
-                        },
+                        }
                     }
                 }
             }
@@ -130,9 +135,13 @@ pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
                 ErrorKind::Session(session::ErrorKind::Flow(_)) => break,
                 ErrorKind::Session(session::ErrorKind::ConnectionClosed) => break,
                 _ => {
-                    warn!("Request processing {} have catch an error {:?}", who, reason);
+                    warn!(
+                        "Request processing {} have catch an error {:?}",
+                        who,
+                        reason
+                    );
                     Output::Fail(reason.to_string())
-                },
+                }
             };
             session.send(output).unwrap();
         }
@@ -187,23 +196,27 @@ pub mod wsmould {
                         match message {
                             OwnedMessage::Text(content) => {
                                 return Ok(Some(content));
-                            },
+                            }
                             OwnedMessage::Close(_) => {
                                 return Ok(None);
-                            },
+                            }
                             OwnedMessage::Ping(payload) => {
                                 self.send_message(&Message::pong(payload))?;
-                            },
+                            }
                             OwnedMessage::Pong(payload) => {
                                 trace!("pong received: {:?}", payload);
-                            },
+                            }
                             OwnedMessage::Binary(_) => (),
                         }
                         // No need ping if interaction was successful
                         last_ping = SystemTime::now();
-                    },
-                    Err(WebSocketError::IoError(ref err)) if err.kind() == ErrorKind::WouldBlock => {
-                        let elapsed = last_ping.elapsed().map(|dur| dur > ping_interval).unwrap_or(false);
+                    }
+                    Err(WebSocketError::IoError(ref err))
+                        if err.kind() == ErrorKind::WouldBlock => {
+                        let elapsed = last_ping
+                            .elapsed()
+                            .map(|dur| dur > ping_interval)
+                            .unwrap_or(false);
                         if elapsed {
                             // Reset time to stop ping flood
                             last_ping = SystemTime::now();
@@ -211,23 +224,29 @@ pub mod wsmould {
                             self.send_message(&Message::ping("mould-ping".as_bytes()))?;
                         }
                         thread::sleep(Duration::from_millis(50));
-                    },
+                    }
                     Err(err) => {
                         return Err(flow::Error::from(err));
-                    },
+                    }
                 }
             }
         }
 
         fn push(&mut self, content: String) -> Result<(), flow::Error> {
-            self.send_message(&Message::text(content)).map_err(flow::Error::from)
+            self.send_message(&Message::text(content)).map_err(
+                flow::Error::from,
+            )
         }
     }
 
 
 
     pub fn start<T, A, B>(addr: A, suite: Arc<super::Suite<T, B>>)
-        where A: ToSocketAddrs, B: Builder<T>, T: Session {
+    where
+        A: ToSocketAddrs,
+        B: Builder<T>,
+        T: Session,
+    {
         // CLIENTS HANDLING
         // Fail if can't bind, safe to unwrap
         let server = Server::bind(addr).unwrap();
@@ -236,7 +255,9 @@ pub mod wsmould {
             let suite = suite.clone();
             thread::spawn(move || {
                 let client = connection.accept().unwrap();
-                client.set_nonblocking(true).expect("can't use non-blocking webosckets");
+                client.set_nonblocking(true).expect(
+                    "can't use non-blocking webosckets",
+                );
                 debug!("Connection from {}", client.who());
                 super::process_session(suite.as_ref(), client);
             });
@@ -291,11 +312,7 @@ pub mod iomould {
         fn pull(&mut self) -> Result<Option<String>, flow::Error> {
             let mut buf = String::new();
             let read = self.reader.read_line(&mut buf)?;
-            if read > 0 {
-                Ok(Some(buf))
-            } else {
-                Ok(None)
-            }
+            if read > 0 { Ok(Some(buf)) } else { Ok(None) }
         }
 
         fn push(&mut self, content: String) -> Result<(), flow::Error> {
@@ -306,7 +323,10 @@ pub mod iomould {
     }
 
     pub fn start<T, B>(suite: Arc<super::Suite<T, B>>)
-        where B: Builder<T>, T: Session {
+    where
+        B: Builder<T>,
+        T: Session,
+    {
         let client = IoFlow::stdio();
         // Use Arc to allow joining diferent start functions
         debug!("Connection from {}", client.who());
