@@ -150,7 +150,7 @@ pub mod wsmould {
     use std::io::ErrorKind;
     use std::sync::Arc;
     use std::net::{ToSocketAddrs, TcpStream};
-    use std::str::{self, Utf8Error};
+    use std::str::Utf8Error;
     use std::time::{SystemTime, Duration};
     use websocket::sync::Server;
     use websocket::message::{OwnedMessage, Message};
