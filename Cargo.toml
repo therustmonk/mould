@@ -1,6 +1,6 @@
 [package]
 name = "mould"
-version = "0.0.25"
+version = "0.1.0"
 readme = "README.md"
 authors = ["Denis Kolodin <deniskolodin@gmail.com>"]
 description = "Rust web-framework for websocket based web-apps."
