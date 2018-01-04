@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use service::{self, Service};
-use session::{self, Context, Output, Builder, Session};
+use session::{self, Context, Input, Output, Builder, Session};
 use worker;
 use flow::Flow;
 
-// TODO Change services on the fly
 pub struct Suite<T: Session, B: Builder<T>> {
     builder: B,
     services: HashMap<String, Box<Service<T>>>,
@@ -50,7 +49,6 @@ where
     debug!("Start session with {}", who);
 
     let mut session: Context<T, R> = Context::new(rut, suite.builder.build());
-    // TODO Determine handler by action name (refactoring handler needed)
 
     loop {
         // Session loop
@@ -58,13 +56,13 @@ where
         let result: Result<()> = (|session: &mut Context<T, R>| {
             loop {
                 // Request loop
-                let (service_name, action, request) = session.recv_request_or_resume()?;
-                let service = suite.services.get(&service_name).ok_or(Error::from(
+                let Input { service, action, payload } = session.recv()?;
+                let service = suite.services.get(&service).ok_or(Error::from(
                     ErrorKind::ServiceNotFound,
                 ))?;
 
                 let mut worker = service.route(&action)?;
-                let output = (worker.perform)(session, request)?;
+                let output = (worker.perform)(session, payload)?;
                 session.send(Output::Item(output))?;
             }
         })(&mut session);

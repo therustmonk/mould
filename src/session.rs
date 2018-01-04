@@ -44,23 +44,16 @@ pub type Request = Value;
 pub type TaskId = usize;
 
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "event", content = "data", rename_all = "lowercase")]
-pub enum Input {
-    Request {
-        service: String,
-        action: String,
-        payload: Value,
-    },
-    Next(Value),
-    Cancel,
+pub struct Input {
+    pub service: String,
+    pub action: String,
+    pub payload: Value,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "event", content = "data", rename_all = "lowercase")]
 pub enum Output {
-    Ready,
     Item(Value),
-    Done,
     Fail(String),
 }
 
@@ -100,35 +93,13 @@ impl<T: Session, R: Flow> Context<T, R> {
         }
     }
 
-    fn recv(&mut self) -> Result<Input> {
+    pub fn recv(
+        &mut self,
+    ) -> Result<Input> {
         let content = self.client.pull()?.ok_or(ErrorKind::ConnectionClosed)?;
         debug!("Recv => {}", content);
         let input = serde_json::from_str(&content)?;
-        if let Input::Cancel = input {
-            Err(ErrorKind::Canceled.into())
-        } else {
-            Ok(input)
-        }
-    }
-
-    pub fn recv_request_or_resume(
-        &mut self,
-    ) -> Result<(String, String, Request)> {
-        match self.recv()? {
-            Input::Request {
-                service,
-                action,
-                payload,
-            } => Ok((service, action, payload)),
-            _ => Err(ErrorKind::UnexpectedState.into()),
-        }
-    }
-
-    pub fn recv_next_or_suspend(&mut self) -> Result<Request> {
-        match self.recv()? {
-            Input::Next(req) => Ok(req),
-            _ => Err(ErrorKind::UnexpectedState.into()),
-        }
+        Ok(input)
     }
 
     pub fn send(&mut self, out: Output) -> Result<()> {
