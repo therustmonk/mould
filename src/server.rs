@@ -1,9 +1,8 @@
-use std::thread;
 use std::collections::HashMap;
 use slab::Slab;
 use service::{self, Service};
 use session::{self, Alternative, Context, Output, Builder, Session};
-use worker::{self, Realize, Shortcut};
+use worker;
 use flow::Flow;
 
 // TODO Change services on the fly
@@ -64,64 +63,21 @@ where
         let result: Result<()> = (|session: &mut Context<T, R>| {
             loop {
                 // Request loop
-                let mut worker = match session.recv_request_or_resume()? {
+                match session.recv_request_or_resume()? {
                     Alternative::Usual((service_name, action, request)) => {
                         let service = suite.services.get(&service_name).ok_or(Error::from(
                             ErrorKind::ServiceNotFound,
                         ))?;
 
                         let mut worker = service.route(&action)?;
-
-                        match (worker.prepare)(session, request)? {
-                            Shortcut::Done => {
-                                session.send(Output::Done)?;
-                                continue;
-                            }
-                            Shortcut::OneItemAndDone(item) => {
-                                session.send(Output::Item(item))?;
-                                session.send(Output::Done)?;
-                                continue;
-                            }
-                            Shortcut::Tuned => (),
-                        }
-                        worker
+                        let output = (worker.perform)(session, request)?;
+                        session.send(Output::Item(output))?;
                     }
                     Alternative::Unusual(task_id) => {
                         if suspended_workers.contains(task_id) {
                             suspended_workers.remove(task_id)
                         } else {
                             return Err(ErrorKind::CannotResume.into());
-                        }
-                    }
-                };
-                loop {
-                    session.send(Output::Ready)?;
-                    match session.recv_next_or_suspend()? {
-                        Alternative::Usual(request) => {
-                            match (worker.realize)(session, request)? {
-                                Realize::OneItem(item) => {
-                                    session.send(Output::Item(item))?;
-                                }
-                                Realize::Empty => {
-                                    thread::yield_now();
-                                }
-                                Realize::Done => {
-                                    session.send(Output::Done)?;
-                                    break;
-                                }
-                            }
-                        }
-                        Alternative::Unusual(()) => {
-                            if suspended_workers.len() != suspended_workers.capacity() {
-                                let entry = suspended_workers.vacant_entry();
-                                let task_id = entry.key();
-                                entry.insert(worker);
-                                session.send(Output::Suspended(task_id))?;
-                                break;
-                            } else {
-                                // TODO Conside to continue worker (don't fail)
-                                return Err(ErrorKind::CannotSuspend.into());
-                            }
                         }
                     }
                 }
