@@ -1,4 +1,4 @@
 Cargo.lock
 .env
-/target/
+target
 **/*.rs.bk

@@ -20,11 +20,13 @@ use serde_json;
 pub use serde_json::Value;
 use flow::{self, Flow};
 
+/// Builds user's session and attaches resources like:
+/// database connections, channels, counters.
 pub trait Builder<T: Session>: Send + Sync + 'static {
     fn build(&self) -> T;
 }
 
-pub struct DefaultBuilder {}
+pub struct DefaultBuilder;
 
 impl<T: Session + Default> Builder<T> for DefaultBuilder {
     fn build(&self) -> T {
@@ -34,6 +36,7 @@ impl<T: Session + Default> Builder<T> for DefaultBuilder {
 
 pub trait Session: 'static {}
 
+/// Binds client connection instance to session
 pub struct Context<T: Session, R: Flow> {
     client: R,
     session: T,

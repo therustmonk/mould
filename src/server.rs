@@ -4,15 +4,15 @@ use session::{self, Context, Input, Output, Builder, Session};
 use worker;
 use flow::Flow;
 
-pub struct Suite<T: Session, B: Builder<T>> {
-    builder: B,
+pub struct Suite<T: Session> {
+    builder: Box<Builder<T>>,
     services: HashMap<String, Box<Service<T>>>,
 }
 
-impl<T: Session, B: Builder<T>> Suite<T, B> {
-    pub fn new(builder: B) -> Self {
+impl<T: Session> Suite<T> {
+    pub fn new<B: Builder<T>>(builder: B) -> Self {
         Suite {
-            builder: builder,
+            builder: Box::new(builder),
             services: HashMap::new(),
         }
     }
@@ -37,9 +37,8 @@ error_chain! {
     }
 }
 
-pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
+pub fn process_session<T, R>(suite: &Suite<T>, rut: R)
 where
-    B: Builder<T>,
     T: Session,
     R: Flow,
 {
@@ -104,7 +103,7 @@ pub mod wsmould {
     use websocket::message::{OwnedMessage, Message};
     use websocket::sync::Client;
     use websocket::result::WebSocketError;
-    use session::{Builder, Session};
+    use session::Session;
     use flow::{self, Flow};
 
     impl From<WebSocketError> for flow::Error {
@@ -180,10 +179,9 @@ pub mod wsmould {
 
 
 
-    pub fn start<T, A, B>(addr: A, suite: Arc<super::Suite<T, B>>)
+    pub fn start<T, A>(addr: A, suite: Arc<super::Suite<T>>)
     where
         A: ToSocketAddrs,
-        B: Builder<T>,
         T: Session,
     {
         // CLIENTS HANDLING
@@ -208,7 +206,7 @@ pub mod wsmould {
 pub mod iomould {
     use std::sync::Arc;
     use std::io::{self, Read, Write, BufRead, BufReader, BufWriter};
-    use session::{Builder, Session};
+    use session::Session;
     use flow::{self, Flow};
 
     impl From<io::Error> for flow::Error {
@@ -261,9 +259,8 @@ pub mod iomould {
         }
     }
 
-    pub fn start<T, B>(suite: Arc<super::Suite<T, B>>)
+    pub fn start<T>(suite: Arc<super::Suite<T>>)
     where
-        B: Builder<T>,
         T: Session,
     {
         let client = IoFlow::stdio();
