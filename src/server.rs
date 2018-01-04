@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use slab::Slab;
 use service::{self, Service};
-use session::{self, Alternative, Context, Output, Builder, Session};
+use session::{self, Context, Output, Builder, Session};
 use worker;
 use flow::Flow;
 
@@ -39,9 +38,6 @@ error_chain! {
     }
 }
 
-/// Limit is necessary to prevent tasks overflow by a client.
-const SUSPEND_LIMIT: usize = 10;
-
 pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
 where
     B: Builder<T>,
@@ -56,31 +52,20 @@ where
     let mut session: Context<T, R> = Context::new(rut, suite.builder.build());
     // TODO Determine handler by action name (refactoring handler needed)
 
-    let mut suspended_workers = Slab::with_capacity(SUSPEND_LIMIT);
     loop {
         // Session loop
         debug!("Begin new request processing for {}", who);
         let result: Result<()> = (|session: &mut Context<T, R>| {
             loop {
                 // Request loop
-                match session.recv_request_or_resume()? {
-                    Alternative::Usual((service_name, action, request)) => {
-                        let service = suite.services.get(&service_name).ok_or(Error::from(
-                            ErrorKind::ServiceNotFound,
-                        ))?;
+                let (service_name, action, request) = session.recv_request_or_resume()?;
+                let service = suite.services.get(&service_name).ok_or(Error::from(
+                    ErrorKind::ServiceNotFound,
+                ))?;
 
-                        let mut worker = service.route(&action)?;
-                        let output = (worker.perform)(session, request)?;
-                        session.send(Output::Item(output))?;
-                    }
-                    Alternative::Unusual(task_id) => {
-                        if suspended_workers.contains(task_id) {
-                            suspended_workers.remove(task_id)
-                        } else {
-                            return Err(ErrorKind::CannotResume.into());
-                        }
-                    }
-                }
+                let mut worker = service.route(&action)?;
+                let output = (worker.perform)(session, request)?;
+                session.send(Output::Item(output))?;
             }
         })(&mut session);
         // Inform user if

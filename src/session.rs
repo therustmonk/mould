@@ -52,8 +52,6 @@ pub enum Input {
         payload: Value,
     },
     Next(Value),
-    Suspend,
-    Resume(TaskId),
     Cancel,
 }
 
@@ -64,12 +62,6 @@ pub enum Output {
     Item(Value),
     Done,
     Fail(String),
-    Suspended(TaskId),
-}
-
-pub enum Alternative<T, U> {
-    Usual(T),
-    Unusual(U),
 }
 
 error_chain! {
@@ -121,22 +113,20 @@ impl<T: Session, R: Flow> Context<T, R> {
 
     pub fn recv_request_or_resume(
         &mut self,
-    ) -> Result<Alternative<(String, String, Request), TaskId>> {
+    ) -> Result<(String, String, Request)> {
         match self.recv()? {
             Input::Request {
                 service,
                 action,
                 payload,
-            } => Ok(Alternative::Usual((service, action, payload))),
-            Input::Resume(task_id) => Ok(Alternative::Unusual(task_id)),
+            } => Ok((service, action, payload)),
             _ => Err(ErrorKind::UnexpectedState.into()),
         }
     }
 
-    pub fn recv_next_or_suspend(&mut self) -> Result<Alternative<Request, ()>> {
+    pub fn recv_next_or_suspend(&mut self) -> Result<Request> {
         match self.recv()? {
-            Input::Next(req) => Ok(Alternative::Usual(req)),
-            Input::Suspend => Ok(Alternative::Unusual(())),
+            Input::Next(req) => Ok(req),
             _ => Err(ErrorKind::UnexpectedState.into()),
         }
     }
