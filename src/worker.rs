@@ -16,27 +16,9 @@ error_chain! {
     }
 }
 
-pub enum Realize<T> {
-    OneItem(T),
-    Empty,
-    Done,
-}
-
-pub enum Shortcut<T> {
-    OneItemAndDone(T),
-    Tuned,
-    Done,
-}
-
 pub trait Worker<T: Session> {
-    type Request;
     type In;
     type Out;
 
-    fn prepare(&mut self, _: &mut T, _: Self::Request) -> Result<Shortcut<Self::Out>> {
-        Ok(Shortcut::Tuned)
-    }
-    fn realize(&mut self, _: &mut T, _: Self::In) -> Result<Realize<Self::Out>> {
-        Err(ErrorKind::Unimplemented.into())
-    }
+    fn perform(&mut self, _: &mut T, _: Self::In) -> Result<Self::Out>;
 }

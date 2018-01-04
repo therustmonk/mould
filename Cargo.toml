@@ -1,6 +1,6 @@
 [package]
 name = "mould"
-version = "0.0.25"
+version = "0.1.0"
 readme = "README.md"
 authors = ["Denis Kolodin <deniskolodin@gmail.com>"]
 description = "Rust web-framework for websocket based web-apps."
@@ -18,6 +18,5 @@ error-chain = "0.11.0"
 serde = "1.0.15"
 serde_derive = "1.0.15"
 serde_json = "1.0.3"
-slab = "0.4.0"
 hyper = { version = "0.11.2", optional = true }
 websocket = { version = "0.20.2", optional = true }

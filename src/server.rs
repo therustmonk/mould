@@ -1,21 +1,18 @@
-use std::thread;
 use std::collections::HashMap;
-use slab::Slab;
 use service::{self, Service};
-use session::{self, Alternative, Context, Output, Builder, Session};
-use worker::{self, Realize, Shortcut};
+use session::{self, Context, Input, Output, Builder, Session};
+use worker;
 use flow::Flow;
 
-// TODO Change services on the fly
-pub struct Suite<T: Session, B: Builder<T>> {
-    builder: B,
+pub struct Suite<T: Session> {
+    builder: Box<Builder<T>>,
     services: HashMap<String, Box<Service<T>>>,
 }
 
-impl<T: Session, B: Builder<T>> Suite<T, B> {
-    pub fn new(builder: B) -> Self {
+impl<T: Session> Suite<T> {
+    pub fn new<B: Builder<T>>(builder: B) -> Self {
         Suite {
-            builder: builder,
+            builder: Box::new(builder),
             services: HashMap::new(),
         }
     }
@@ -40,12 +37,8 @@ error_chain! {
     }
 }
 
-/// Limit is necessary to prevent tasks overflow by a client.
-const SUSPEND_LIMIT: usize = 10;
-
-pub fn process_session<T, B, R>(suite: &Suite<T, B>, rut: R)
+pub fn process_session<T, R>(suite: &Suite<T>, rut: R)
 where
-    B: Builder<T>,
     T: Session,
     R: Flow,
 {
@@ -55,76 +48,21 @@ where
     debug!("Start session with {}", who);
 
     let mut session: Context<T, R> = Context::new(rut, suite.builder.build());
-    // TODO Determine handler by action name (refactoring handler needed)
 
-    let mut suspended_workers = Slab::with_capacity(SUSPEND_LIMIT);
     loop {
         // Session loop
         debug!("Begin new request processing for {}", who);
         let result: Result<()> = (|session: &mut Context<T, R>| {
             loop {
                 // Request loop
-                let mut worker = match session.recv_request_or_resume()? {
-                    Alternative::Usual((service_name, action, request)) => {
-                        let service = suite.services.get(&service_name).ok_or(Error::from(
-                            ErrorKind::ServiceNotFound,
-                        ))?;
+                let Input { service, action, payload } = session.recv()?;
+                let service = suite.services.get(&service).ok_or(Error::from(
+                    ErrorKind::ServiceNotFound,
+                ))?;
 
-                        let mut worker = service.route(&action)?;
-
-                        match (worker.prepare)(session, request)? {
-                            Shortcut::Done => {
-                                session.send(Output::Done)?;
-                                continue;
-                            }
-                            Shortcut::OneItemAndDone(item) => {
-                                session.send(Output::Item(item))?;
-                                session.send(Output::Done)?;
-                                continue;
-                            }
-                            Shortcut::Tuned => (),
-                        }
-                        worker
-                    }
-                    Alternative::Unusual(task_id) => {
-                        if suspended_workers.contains(task_id) {
-                            suspended_workers.remove(task_id)
-                        } else {
-                            return Err(ErrorKind::CannotResume.into());
-                        }
-                    }
-                };
-                loop {
-                    session.send(Output::Ready)?;
-                    match session.recv_next_or_suspend()? {
-                        Alternative::Usual(request) => {
-                            match (worker.realize)(session, request)? {
-                                Realize::OneItem(item) => {
-                                    session.send(Output::Item(item))?;
-                                }
-                                Realize::Empty => {
-                                    thread::yield_now();
-                                }
-                                Realize::Done => {
-                                    session.send(Output::Done)?;
-                                    break;
-                                }
-                            }
-                        }
-                        Alternative::Unusual(()) => {
-                            if suspended_workers.len() != suspended_workers.capacity() {
-                                let entry = suspended_workers.vacant_entry();
-                                let task_id = entry.key();
-                                entry.insert(worker);
-                                session.send(Output::Suspended(task_id))?;
-                                break;
-                            } else {
-                                // TODO Conside to continue worker (don't fail)
-                                return Err(ErrorKind::CannotSuspend.into());
-                            }
-                        }
-                    }
-                }
+                let mut worker = service.route(&action)?;
+                let output = (worker.perform)(session, payload)?;
+                session.send(Output::Item(output))?;
             }
         })(&mut session);
         // Inform user if
@@ -165,7 +103,7 @@ pub mod wsmould {
     use websocket::message::{OwnedMessage, Message};
     use websocket::sync::Client;
     use websocket::result::WebSocketError;
-    use session::{Builder, Session};
+    use session::Session;
     use flow::{self, Flow};
 
     impl From<WebSocketError> for flow::Error {
@@ -241,10 +179,9 @@ pub mod wsmould {
 
 
 
-    pub fn start<T, A, B>(addr: A, suite: Arc<super::Suite<T, B>>)
+    pub fn start<T, A>(addr: A, suite: Arc<super::Suite<T>>)
     where
         A: ToSocketAddrs,
-        B: Builder<T>,
         T: Session,
     {
         // CLIENTS HANDLING
@@ -269,7 +206,7 @@ pub mod wsmould {
 pub mod iomould {
     use std::sync::Arc;
     use std::io::{self, Read, Write, BufRead, BufReader, BufWriter};
-    use session::{Builder, Session};
+    use session::Session;
     use flow::{self, Flow};
 
     impl From<io::Error> for flow::Error {
@@ -322,9 +259,8 @@ pub mod iomould {
         }
     }
 
-    pub fn start<T, B>(suite: Arc<super::Suite<T, B>>)
+    pub fn start<T>(suite: Arc<super::Suite<T>>)
     where
-        B: Builder<T>,
         T: Session,
     {
         let client = IoFlow::stdio();

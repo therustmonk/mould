@@ -1,9 +1,7 @@
-use std::rc::Rc;
-use std::cell::RefCell;
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
 use session::Session;
-use worker::{self, Worker, Shortcut, Realize};
+use worker::{self, Worker};
 
 error_chain! {
     errors {
@@ -22,50 +20,24 @@ pub trait Service<T: Session>: Send + Sync + 'static {
 }
 
 pub struct Action<T: 'static> {
-    pub prepare: Box<FnMut(&mut T, Value) -> worker::Result<Shortcut<Value>>>,
-    pub realize: Box<FnMut(&mut T, Value) -> worker::Result<Realize<Value>>>,
+    pub perform: Box<FnMut(&mut T, Value) -> worker::Result<Value>>,
 }
 
 impl<T: Session> Action<T> {
-    pub fn from_worker<W, R, I, O>(worker: W) -> Self
+    pub fn from_worker<W, I, O>(mut worker: W) -> Self
     where
-        for<'de> R: Deserialize<'de>,
         for<'de> I: Deserialize<'de>,
         O: Serialize,
-        W: Worker<T, Request = R, In = I, Out = O> + 'static,
+        W: Worker<T, In = I, Out = O> + 'static,
     {
-        let rcw = Rc::new(RefCell::new(worker));
-        let worker = rcw.clone();
-        let prepare = move |session: &mut T, value: Value| {
-            let p = serde_json::from_value(value)?;
-            let prepared = worker.borrow_mut().prepare(session, p)?;
-            let result = match prepared {
-                Shortcut::OneItemAndDone(t) => {
-                    let t = serde_json::to_value(t)?;
-                    Shortcut::OneItemAndDone(t)
-                }
-                Shortcut::Tuned => Shortcut::Tuned,
-                Shortcut::Done => Shortcut::Done,
-            };
-            Ok(result)
-        };
-        let worker = rcw.clone();
-        let realize = move |session: &mut T, value: Value| {
-            let value = serde_json::from_value(value)?;
-            let realized = worker.borrow_mut().realize(session, value)?;
-            let result = match realized {
-                Realize::OneItem(t) => {
-                    let t = serde_json::to_value(t)?;
-                    Realize::OneItem(t)
-                }
-                Realize::Empty => Realize::Empty,
-                Realize::Done => Realize::Done,
-            };
+        let perform = move |session: &mut T, value: Value| {
+            let input = serde_json::from_value(value)?;
+            let output = worker.perform(session, input)?;
+            let result = serde_json::to_value(output)?;
             Ok(result)
         };
         Action {
-            prepare: Box::new(prepare),
-            realize: Box::new(realize),
+            perform: Box::new(perform),
         }
     }
 }

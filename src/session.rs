@@ -20,11 +20,13 @@ use serde_json;
 pub use serde_json::Value;
 use flow::{self, Flow};
 
+/// Builds user's session and attaches resources like:
+/// database connections, channels, counters.
 pub trait Builder<T: Session>: Send + Sync + 'static {
     fn build(&self) -> T;
 }
 
-pub struct DefaultBuilder {}
+pub struct DefaultBuilder;
 
 impl<T: Session + Default> Builder<T> for DefaultBuilder {
     fn build(&self) -> T {
@@ -34,6 +36,7 @@ impl<T: Session + Default> Builder<T> for DefaultBuilder {
 
 pub trait Session: 'static {}
 
+/// Binds client connection instance to session
 pub struct Context<T: Session, R: Flow> {
     client: R,
     session: T,
@@ -44,32 +47,17 @@ pub type Request = Value;
 pub type TaskId = usize;
 
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "event", content = "data", rename_all = "lowercase")]
-pub enum Input {
-    Request {
-        service: String,
-        action: String,
-        payload: Value,
-    },
-    Next(Value),
-    Suspend,
-    Resume(TaskId),
-    Cancel,
+pub struct Input {
+    pub service: String,
+    pub action: String,
+    pub payload: Value,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "event", content = "data", rename_all = "lowercase")]
 pub enum Output {
-    Ready,
     Item(Value),
-    Done,
     Fail(String),
-    Suspended(TaskId),
-}
-
-pub enum Alternative<T, U> {
-    Usual(T),
-    Unusual(U),
 }
 
 error_chain! {
@@ -108,37 +96,13 @@ impl<T: Session, R: Flow> Context<T, R> {
         }
     }
 
-    fn recv(&mut self) -> Result<Input> {
+    pub fn recv(
+        &mut self,
+    ) -> Result<Input> {
         let content = self.client.pull()?.ok_or(ErrorKind::ConnectionClosed)?;
         debug!("Recv => {}", content);
         let input = serde_json::from_str(&content)?;
-        if let Input::Cancel = input {
-            Err(ErrorKind::Canceled.into())
-        } else {
-            Ok(input)
-        }
-    }
-
-    pub fn recv_request_or_resume(
-        &mut self,
-    ) -> Result<Alternative<(String, String, Request), TaskId>> {
-        match self.recv()? {
-            Input::Request {
-                service,
-                action,
-                payload,
-            } => Ok(Alternative::Usual((service, action, payload))),
-            Input::Resume(task_id) => Ok(Alternative::Unusual(task_id)),
-            _ => Err(ErrorKind::UnexpectedState.into()),
-        }
-    }
-
-    pub fn recv_next_or_suspend(&mut self) -> Result<Alternative<Request, ()>> {
-        match self.recv()? {
-            Input::Next(req) => Ok(Alternative::Usual(req)),
-            Input::Suspend => Ok(Alternative::Unusual(())),
-            _ => Err(ErrorKind::UnexpectedState.into()),
-        }
+        Ok(input)
     }
 
     pub fn send(&mut self, out: Output) -> Result<()> {
