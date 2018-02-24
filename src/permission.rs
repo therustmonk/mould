@@ -1,9 +1,11 @@
 
-error_chain! {
-    errors {
-        AccessDenied
-    }
+#[derive(Debug, Fail)]
+pub enum Error {
+    #[fail(display = "access denied")]
+    AccessDenied,
 }
+
+pub type Result<T> = ::std::result::Result<T, Error>;
 
 pub trait Rights {}
 
@@ -16,7 +18,7 @@ impl<T: HasRight<R>, R: Rights> Require<R> for T {
         if self.has_right(right) {
             Ok(())
         } else {
-            Err(ErrorKind::AccessDenied.into())
+            Err(Error::AccessDenied)
         }
     }
 }

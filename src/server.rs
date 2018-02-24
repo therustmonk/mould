@@ -22,20 +22,41 @@ impl<T: Session> Suite<T> {
     }
 }
 
-error_chain! {
-    links {
-        Session(session::Error, session::ErrorKind);
-        Worker(worker::Error, worker::ErrorKind);
-        Service(service::Error, service::ErrorKind);
-    }
-    foreign_links {
-    }
-    errors {
-        ServiceNotFound
-        CannotSuspend
-        CannotResume
+#[derive(Debug, Fail)]
+pub enum Error {
+    #[fail(display = "service not found")]
+    ServiceNotFound,
+    #[fail(display = "cannot suspend")]
+    CannotSuspend,
+    #[fail(display = "cannot resume")]
+    CannotResume,
+    #[fail(display = "service error")]
+    ServiceFailed(#[cause] service::Error),
+    #[fail(display = "worker error")]
+    WorkerFailed(#[cause] worker::Error),
+    #[fail(display = "session error")]
+    SessionFailed(#[cause] session::Error),
+}
+
+impl From<service::Error> for Error {
+    fn from(cause: service::Error) -> Self {
+        Error::ServiceFailed(cause)
     }
 }
+
+impl From<worker::Error> for Error {
+    fn from(cause: worker::Error) -> Self {
+        Error::WorkerFailed(cause)
+    }
+}
+
+impl From<session::Error> for Error {
+    fn from(cause: session::Error) -> Self {
+        Error::SessionFailed(cause)
+    }
+}
+
+pub type Result<T> = ::std::result::Result<T, Error>;
 
 pub fn process_session<T, R>(suite: &Suite<T>, rut: R)
 where
@@ -56,9 +77,7 @@ where
             loop {
                 // Request loop
                 let Input { service, action, payload } = session.recv()?;
-                let service = suite.services.get(&service).ok_or(Error::from(
-                    ErrorKind::ServiceNotFound,
-                ))?;
+                let service = suite.services.get(&service).ok_or(Error::ServiceNotFound)?;
 
                 let mut worker = service.route(&action)?;
                 let output = (worker.perform)(session, payload)?;
@@ -67,11 +86,11 @@ where
         })(&mut session);
         // Inform user if
         if let Err(reason) = result {
-            let output = match *reason.kind() {
+            let output = match reason {
                 // TODO Refactor cancel (rename to StopAll and add CancelWorker)
-                ErrorKind::Session(session::ErrorKind::Canceled) => continue,
-                ErrorKind::Session(session::ErrorKind::Flow(_)) => break,
-                ErrorKind::Session(session::ErrorKind::ConnectionClosed) => break,
+                Error::SessionFailed(session::Error::Canceled) => continue,
+                Error::SessionFailed(session::Error::FlowBroken(_)) => break,
+                Error::SessionFailed(session::Error::ConnectionClosed) => break,
                 _ => {
                     warn!(
                         "Request processing {} have catch an error {:?}",
@@ -108,13 +127,13 @@ pub mod wsmould {
 
     impl From<WebSocketError> for flow::Error {
         fn from(_: WebSocketError) -> Self {
-            flow::ErrorKind::ConnectionBroken.into()
+            flow::Error::ConnectionBroken
         }
     }
 
     impl From<Utf8Error> for flow::Error {
         fn from(_: Utf8Error) -> Self {
-            flow::ErrorKind::BadMessageEncoding.into()
+            flow::Error::BadMessageEncoding
         }
     }
 
@@ -211,7 +230,7 @@ pub mod iomould {
 
     impl From<io::Error> for flow::Error {
         fn from(_: io::Error) -> Self {
-            flow::ErrorKind::ConnectionBroken.into()
+            flow::Error::ConnectionBroken
         }
     }
 
