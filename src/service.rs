@@ -3,11 +3,13 @@ use serde_json::{self, Value};
 use session::Session;
 use worker::{self, Worker};
 
-error_chain! {
-    errors {
-        ActionNotFound
-    }
+#[derive(Debug, Fail)]
+pub enum Error {
+    #[fail(display = "action not found")]
+    ActionNotFound,
 }
+
+pub type Result<T> = ::std::result::Result<T, Error>;
 
 /// Service looks into session or request to build corresponding worker.
 ///

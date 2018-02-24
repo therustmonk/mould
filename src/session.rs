@@ -60,19 +60,33 @@ pub enum Output {
     Fail(String),
 }
 
-error_chain! {
-    links {
-        Flow(flow::Error, flow::ErrorKind);
-    }
-    foreign_links {
-        Serde(serde_json::Error);
-    }
-    errors {
-        ConnectionClosed
-        UnexpectedState
-        Canceled
+#[derive(Debug, Fail)]
+pub enum Error {
+    #[fail(display = "connection closed")]
+    ConnectionClosed,
+    #[fail(display = "unexpected state")]
+    UnexpectedState,
+    #[fail(display = "canceled")]
+    Canceled,
+    #[fail(display = "flow error")]
+    FlowBroken(#[cause] flow::Error),
+    #[fail(display = "serde error")]
+    SerdeFailed(#[cause] serde_json::Error),
+}
+
+impl From<flow::Error> for Error {
+    fn from(cause: flow::Error) -> Self {
+        Error::FlowBroken(cause)
     }
 }
+
+impl From<serde_json::Error> for Error {
+    fn from(cause: serde_json::Error) -> Self {
+        Error::SerdeFailed(cause)
+    }
+}
+
+pub type Result<T> = ::std::result::Result<T, Error>;
 
 impl<T: Session, R: Flow> Deref for Context<T, R> {
     type Target = T;
@@ -99,7 +113,7 @@ impl<T: Session, R: Flow> Context<T, R> {
     pub fn recv(
         &mut self,
     ) -> Result<Input> {
-        let content = self.client.pull()?.ok_or(ErrorKind::ConnectionClosed)?;
+        let content = self.client.pull()?.ok_or(Error::ConnectionClosed)?;
         debug!("Recv => {}", content);
         let input = serde_json::from_str(&content)?;
         Ok(input)
