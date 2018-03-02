@@ -8,6 +8,7 @@ extern crate serde_derive;
 extern crate serde_json;
 #[cfg(feature = "wsmould")]
 extern crate websocket;
+extern crate futures;
 
 pub mod service;
 pub mod worker;

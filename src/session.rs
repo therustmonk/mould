@@ -44,10 +44,11 @@ pub struct Context<T: Session, R: Flow> {
 
 pub type Request = Value;
 
-pub type TaskId = usize;
+pub type TaskId = u64;
 
 #[derive(Serialize, Deserialize)]
 pub struct Input {
+    pub id: TaskId,
     pub service: String,
     pub action: String,
     pub payload: Value,

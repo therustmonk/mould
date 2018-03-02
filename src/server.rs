@@ -76,12 +76,12 @@ where
         let result: Result<()> = (|session: &mut Context<T, R>| {
             loop {
                 // Request loop
-                let Input { service, action, payload } = session.recv()?;
+                let Input { id, service, action, payload } = session.recv()?;
                 let service = suite.services.get(&service).ok_or(Error::ServiceNotFound)?;
 
                 let mut worker = service.route(&action)?;
-                let output = (worker.perform)(session, payload)?;
-                session.send(Output::Item(output))?;
+                let receiver = (worker.perform)(id, session, payload);
+                //session.send(Output::Item(output))?;
             }
         })(&mut session);
         // Inform user if
@@ -137,9 +137,13 @@ pub mod wsmould {
         }
     }
 
-    impl Flow for Client<TcpStream> {
+    pub struct WsFlow {
+        client: Client<TcpStream>,
+    }
+
+    impl Flow for WsFlow {
         fn who(&self) -> String {
-            let ip = self.peer_addr().unwrap();
+            let ip = self.client.peer_addr().unwrap();
             format!("WS IP {}", ip)
         }
 
@@ -147,7 +151,7 @@ pub mod wsmould {
             let mut last_ping = SystemTime::now();
             let ping_interval = Duration::from_secs(20);
             loop {
-                let message = self.recv_message();
+                let message = self.client.recv_message();
                 match message {
                     Ok(message) => {
                         match message {
@@ -158,7 +162,7 @@ pub mod wsmould {
                                 return Ok(None);
                             }
                             OwnedMessage::Ping(payload) => {
-                                self.send_message(&Message::pong(payload))?;
+                                self.client.send_message(&Message::pong(payload))?;
                             }
                             OwnedMessage::Pong(payload) => {
                                 trace!("pong received: {:?}", payload);
@@ -178,7 +182,7 @@ pub mod wsmould {
                             // Reset time to stop ping flood
                             last_ping = SystemTime::now();
                             trace!("sending ping");
-                            self.send_message(&Message::ping("mould-ping".as_bytes()))?;
+                            self.client.send_message(&Message::ping("mould-ping".as_bytes()))?;
                         }
                         thread::sleep(Duration::from_millis(50));
                     }
@@ -190,7 +194,7 @@ pub mod wsmould {
         }
 
         fn push(&mut self, content: String) -> Result<(), flow::Error> {
-            self.send_message(&Message::text(content)).map_err(
+            self.client.send_message(&Message::text(content)).map_err(
                 flow::Error::from,
             )
         }
@@ -214,8 +218,9 @@ pub mod wsmould {
                 client.set_nonblocking(true).expect(
                     "can't use non-blocking webosckets",
                 );
-                debug!("Connection from {}", client.who());
-                super::process_session(suite.as_ref(), client);
+                let flow = WsFlow { client };
+                debug!("Connection from {}", flow.who());
+                super::process_session(suite.as_ref(), flow);
             });
         }
     }
