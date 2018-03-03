@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
-use session::{Session, TaskResult};
+use session::Session;
 use server::TaskResolver;
 use worker::{self, Worker};
 
@@ -39,13 +39,7 @@ impl<T: Serialize> Resolver<T> {
         let value = data.and_then(|value| {
             serde_json::to_value(value).map_err(|err| err.to_string().into())
         });
-        let task_result = {
-            match value {
-                Ok(data) => TaskResult::Item(data),
-                Err(err) => TaskResult::Fail(err.to_string()),
-            }
-        };
-        self.task_resolver.resolve(task_result);
+        self.task_resolver.resolve(value);
     }
 }
 

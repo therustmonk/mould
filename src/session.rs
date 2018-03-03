@@ -58,14 +58,8 @@ pub struct Input {
 #[derive(Serialize, Deserialize)]
 pub struct Output {
     pub id: TaskId,
-    pub result: TaskResult,
-}
-
-#[derive(Serialize, Deserialize)]
-//#[serde(tag = "event", content = "data", rename_all = "lowercase")]
-pub enum TaskResult {
-    Item(Value),
-    Fail(String),
+    pub result: Option<Value>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Fail)]

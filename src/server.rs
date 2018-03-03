@@ -1,8 +1,10 @@
 use std::collections::HashMap;
-use futures::Async;
+use std::borrow::Cow;
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
+use futures::Async;
+use serde_json::Value;
 use service::{self, Service};
-use session::{self, Context, Input, Output, Builder, Session, TaskId, TaskResult};
+use session::{self, Context, Input, Output, Builder, Session, TaskId};
 use worker;
 use flow::Flow;
 
@@ -63,11 +65,15 @@ pub struct TaskResolver {
 }
 
 impl TaskResolver {
-    pub fn resolve(self, result: TaskResult) {
-        let output = Output {
-            id: self.id,
-            result,
+    pub fn resolve(self, result: ::std::result::Result<Value, Cow<'static, str>>) {
+        let id = self.id;
+        let (result, error) = {
+            match result {
+                Ok(result) => (Some(result), None),
+                Err(error) => (None, Some(error.into())),
+            }
         };
+        let output = Output { id, result, error };
         self.sender.send(output).expect("can't send a resolved value");
     }
 }
@@ -132,7 +138,8 @@ where
                     );
                     Output {
                         id: 0,
-                        result: TaskResult::Fail(reason.to_string()),
+                        result: None,
+                        error: Some(reason.to_string()),
                     }
                 }
             };

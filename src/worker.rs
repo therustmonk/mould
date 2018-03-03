@@ -46,9 +46,11 @@ impl From<String> for Error {
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
+pub type TaskHandle = (); // TODO Implement handle to let the cancelling of task
+
 pub trait Worker<T: Session> {
     type In;
     type Out;
 
-    fn perform(&mut self, session: &mut T, request: Self::In, resolver: Resolver<Self::Out>) -> Result<()>;
+    fn perform(&mut self, session: &mut T, request: Self::In, resolver: Resolver<Self::Out>) -> Result<TaskHandle>;
 }
