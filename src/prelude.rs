@@ -2,7 +2,7 @@
 
 pub use session::Session;
 
-pub use service::{self, Action};
+pub use service::{self, Action, Resolver};
 
 pub use worker::{self, Worker};
 

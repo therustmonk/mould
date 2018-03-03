@@ -1,8 +1,9 @@
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
-use futures::unsync::oneshot::{channel, Sender, Receiver};
-use session::{Session, TaskId};
+use session::{Session, TaskResult};
+use server::TaskResolver;
 use worker::{self, Worker};
 
 #[derive(Debug, Fail)]
@@ -24,20 +25,27 @@ pub trait Service<T: Session>: Send + Sync + 'static {
 }
 
 pub struct Action<T: 'static> {
-    pub perform: Box<FnMut(TaskId, &mut T, Value) -> worker::Result<Receiver<worker::Result<Value>>>>,
+    pub perform: Box<FnMut(TaskResolver, &mut T, Value) -> worker::Result<()>>,
 }
 
 pub struct Resolver<T> {
-    sender: Sender<worker::Result<Value>>,
+    task_resolver: TaskResolver,
     _data: PhantomData<T>,
 }
 
 impl<T: Serialize> Resolver<T> {
-    fn resolve(self, data: worker::Result<T>) {
+    /// It uses string for errors to force map every error to a clear error message
+    pub fn resolve(self, data: ::std::result::Result<T, Cow<'static, str>>) {
         let value = data.and_then(|value| {
-            serde_json::to_value(value).map_err(worker::Error::from)
+            serde_json::to_value(value).map_err(|err| err.to_string().into())
         });
-        self.sender.send(value).expect("can't send a resolved value");
+        let task_result = {
+            match value {
+                Ok(data) => TaskResult::Item(data),
+                Err(err) => TaskResult::Fail(err.to_string()),
+            }
+        };
+        self.task_resolver.resolve(task_result);
     }
 }
 
@@ -48,12 +56,12 @@ impl<T: Session> Action<T> {
         O: Serialize,
         W: Worker<T, In = I, Out = O> + 'static,
     {
-        let perform = move |id: TaskId, session: &mut T, value: Value| {
-            let (sender, receiver) = channel();
+        let perform = move |task_resolver: TaskResolver, session: &mut T, value: Value| {
             let input = serde_json::from_value(value)?;
-            let resolver = Resolver { sender, _data: PhantomData };
-            worker.perform(session, input, resolver);
-            Ok(receiver)
+            let resolver = Resolver { task_resolver, _data: PhantomData };
+            // TODO Use sender instead of the direct result
+            worker.perform(session, input, resolver)?;
+            Ok(())
         };
         Action {
             perform: Box::new(perform),

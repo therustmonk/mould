@@ -50,5 +50,5 @@ pub trait Worker<T: Session> {
     type In;
     type Out;
 
-    fn perform(&mut self, session: &mut T, request: Self::In, resolver: Resolver<Self::Out>);
+    fn perform(&mut self, session: &mut T, request: Self::In, resolver: Resolver<Self::Out>) -> Result<()>;
 }

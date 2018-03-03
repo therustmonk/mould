@@ -18,6 +18,7 @@ use std::default::Default;
 use std::ops::{Deref, DerefMut};
 use serde_json;
 pub use serde_json::Value;
+use futures::{Poll, Async};
 use flow::{self, Flow};
 
 /// Builds user's session and attaches resources like:
@@ -55,8 +56,14 @@ pub struct Input {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "event", content = "data", rename_all = "lowercase")]
-pub enum Output {
+pub struct Output {
+    pub id: TaskId,
+    pub result: TaskResult,
+}
+
+#[derive(Serialize, Deserialize)]
+//#[serde(tag = "event", content = "data", rename_all = "lowercase")]
+pub enum TaskResult {
     Item(Value),
     Fail(String),
 }
@@ -67,8 +74,6 @@ pub enum Error {
     ConnectionClosed,
     #[fail(display = "unexpected state")]
     UnexpectedState,
-    #[fail(display = "canceled")]
-    Canceled,
     #[fail(display = "flow error")]
     FlowBroken(#[cause] flow::Error),
     #[fail(display = "serde error")]
@@ -113,11 +118,11 @@ impl<T: Session, R: Flow> Context<T, R> {
 
     pub fn recv(
         &mut self,
-    ) -> Result<Input> {
-        let content = self.client.pull()?.ok_or(Error::ConnectionClosed)?;
+    ) -> Poll<Input, Error> {
+        let content = try_ready!(self.client.pull()).ok_or(Error::ConnectionClosed)?;
         debug!("Recv => {}", content);
         let input = serde_json::from_str(&content)?;
-        Ok(input)
+        Ok(Async::Ready(input))
     }
 
     pub fn send(&mut self, out: Output) -> Result<()> {

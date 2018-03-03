@@ -4,6 +4,14 @@ This framework helps to create interactive web-applications with websockets comm
 
 [Documentation](https://docs.rs/mould/)
 
+## Comparsion with JSON-RPC
+
+This framework looks similar to JSON-RPC, but it has some differences:
+
+* It's stateful and keeps context to a client
+* Has a `Session` trait to implement own user's context
+* Uses effective binary protocol (not JSON)
+
 ## License
 
 Licensed under either of
