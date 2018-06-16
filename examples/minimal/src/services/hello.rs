@@ -18,7 +18,7 @@ impl<T> service::Service<T> for HelloService
                 Ok(Action::from_worker(do_it::DoItWorker))
             }
             _ => {
-                Err(service::ErrorKind::ActionNotFound.into())
+                Err(service::Error::ActionNotFound.into())
             }
         }
     }
