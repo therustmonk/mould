@@ -1,3 +1,4 @@
+use futures::Poll;
 
 #[derive(Debug, Fail)]
 pub enum Error {
@@ -11,6 +12,6 @@ pub type Result<T> = ::std::result::Result<T, Error>;
 
 pub trait Flow {
     fn who(&self) -> String;
-    fn pull(&mut self) -> Result<Option<String>>;
+    fn pull(&mut self) -> Poll<Option<String>, Error>;
     fn push(&mut self, content: String) -> Result<()>;
 }

@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use serde_json;
 use session::Session;
+use service::Resolver;
 use permission;
 
 #[derive(Debug, Fail)]
@@ -45,9 +46,11 @@ impl From<String> for Error {
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
+pub type TaskHandle = (); // TODO Implement handle to let the cancelling of task
+
 pub trait Worker<T: Session> {
     type In;
     type Out;
 
-    fn perform(&mut self, _: &mut T, _: Self::In) -> Result<Self::Out>;
+    fn perform(&mut self, session: &mut T, request: Self::In, resolver: Resolver<Self::Out>) -> Result<TaskHandle>;
 }
